@@ -7,6 +7,8 @@ interface StudentSidebarProps {
   unreadCount: number;
   onNotificationsClick: () => void;
   onLogout: () => void;
+  collapsed: boolean;
+  onToggleCollapse: () => void;
 }
 
 const StudentSidebar: React.FC<StudentSidebarProps> = ({
@@ -15,6 +17,8 @@ const StudentSidebar: React.FC<StudentSidebarProps> = ({
   unreadCount,
   onNotificationsClick,
   onLogout,
+  collapsed,
+  onToggleCollapse,
 }) => {
   // State para sa dropdown toggle
   const [isFormDropdownOpen, setIsFormDropdownOpen] = useState(false);
@@ -38,12 +42,12 @@ const StudentSidebar: React.FC<StudentSidebarProps> = ({
 
   return (
     <div
-      className="sidebar p-3 d-flex flex-column"
+      className={`sidebar p-3 d-flex flex-column ${collapsed ? "sidebar-collapsed" : ""}`}
       style={{ minHeight: "100vh" }}
     >
       {/* Logo */}
       <div className="d-flex align-items-center justify-content-center mb-4 gap-2">
-        <div style={{ width: "40px", height: "40px" }}>
+        <div style={{ width: "40px", height: "40px", flexShrink: 0 }}>
           <svg
             width="40"
             height="40"
@@ -57,13 +61,13 @@ const StudentSidebar: React.FC<StudentSidebarProps> = ({
             <rect x="20" y="31" width="30" height="8" rx="2" fill="#2c5f2d" />
           </svg>
         </div>
-        <h4 className="mb-0 fw-bold">MEDILOG</h4>
+        {!collapsed && <h4 className="mb-0 fw-bold">MEDILOG</h4>}
       </div>
 
       <hr className="border-white opacity-25 mb-4" />
 
       <ul className="nav flex-column gap-2">
-        {/* Dashboard */}
+        {/* Home */}
         <li className="nav-item">
           <a
             href="#"
@@ -73,29 +77,34 @@ const StudentSidebar: React.FC<StudentSidebarProps> = ({
             }}
             className={`nav-link ${activeView === "landing" ? "active-link" : ""}`}
           >
-            <i className="bi bi-grid me-2"></i> Dashboard
+            <i className="bi bi-house me-2"></i> {!collapsed && "Home"}
           </a>
         </li>
 
         {/* Online Form Dropdown */}
         <li className="nav-item">
           <div
-            onClick={() => setIsFormDropdownOpen(!isFormDropdownOpen)}
+            onClick={() =>
+              !collapsed && setIsFormDropdownOpen(!isFormDropdownOpen)
+            }
             className={`nav-link d-flex justify-content-between align-items-center ${
               isFormActive ? "active-link" : ""
             }`}
             style={{ cursor: "pointer", transition: "all 0.2s" }}
           >
             <span>
-              <i className="bi bi-file-text me-2"></i> Online Form
+              <i className="bi bi-file-text me-2"></i>{" "}
+              {!collapsed && "Online Form"}
             </span>
-            <i
-              className={`bi bi-chevron-${isFormDropdownOpen ? "down" : "right"}`}
-            ></i>
+            {!collapsed && (
+              <i
+                className={`bi bi-chevron-${isFormDropdownOpen ? "down" : "right"}`}
+              ></i>
+            )}
           </div>
 
           {/* Sub-menu items */}
-          {isFormDropdownOpen && (
+          {isFormDropdownOpen && !collapsed && (
             <ul className="nav flex-column ms-3 mt-2 border-start border-2 ps-2">
               <li className="nav-item">
                 <a
@@ -171,7 +180,8 @@ const StudentSidebar: React.FC<StudentSidebarProps> = ({
             }}
             className={`nav-link ${activeView === "history" ? "active-link" : ""}`}
           >
-            <i className="bi bi-clock-history me-2"></i> History
+            <i className="bi bi-clock-history me-2"></i>{" "}
+            {!collapsed && "History"}
           </a>
         </li>
 
@@ -185,7 +195,7 @@ const StudentSidebar: React.FC<StudentSidebarProps> = ({
             }}
             className={`nav-link ${activeView === "notifications" ? "active-link" : ""}`}
           >
-            <i className="bi bi-bell me-2"></i> Notifications
+            <i className="bi bi-bell me-2"></i> {!collapsed && "Notifications"}
             {unreadCount > 0 && (
               <span className="badge bg-danger ms-2">{unreadCount}</span>
             )}
@@ -196,7 +206,8 @@ const StudentSidebar: React.FC<StudentSidebarProps> = ({
       {/* Logout */}
       <div className="mt-auto">
         <a href="#" onClick={onLogout} className="nav-link text-danger">
-          <i className="bi bi-box-arrow-right me-2"></i> Logout
+          <i className="bi bi-box-arrow-right me-2"></i>{" "}
+          {!collapsed && "Logout"}
         </a>
       </div>
     </div>

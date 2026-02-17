@@ -12,10 +12,7 @@ const NewStudentForm: React.FC<NewStudentFormProps> = ({
   setActiveView,
 }) => {
   return (
-    <div
-      className="section onlineFormSection fade-in"
-      style={{ maxWidth: "720px", margin: "0 auto" }}
-    >
+    <div className="section onlineFormSection fade-in">
       {/* Outer Title */}
       <div className="mb-4">
         <h4 className="text-success fw-bold">New Student</h4>

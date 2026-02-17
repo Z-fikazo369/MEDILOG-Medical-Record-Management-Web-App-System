@@ -8,6 +8,9 @@ import User from "../models/User.js";
 import PhysicalExam from "../models/PhysicalExam.js";
 import MedicalMonitoring from "../models/MedicalMonitoring.js";
 import MedicalCertificate from "../models/MedicalCertificate.js";
+import MedicineIssuance from "../models/MedicineIssuance.js";
+import LaboratoryRequest from "../models/LaboratoryRequest.js";
+import PharmacyInventory from "../models/PharmacyInventory.js";
 import Notification from "../models/Notification.js";
 
 // Utility to get the current directory name in ES Modules
@@ -54,12 +57,18 @@ export const createSystemBackup = async (req, res) => {
       physicalExams,
       monitoringRecords,
       certificateRecords,
+      medicineIssuances,
+      laboratoryRequests,
+      pharmacyInventory,
       notifications,
     ] = await Promise.all([
       User.find().lean(),
       PhysicalExam.find().lean(),
       MedicalMonitoring.find().lean(),
       MedicalCertificate.find().lean(),
+      MedicineIssuance.find().lean(),
+      LaboratoryRequest.find().lean(),
+      PharmacyInventory.find().lean(),
       Notification.find().lean(),
     ]);
 
@@ -68,6 +77,9 @@ export const createSystemBackup = async (req, res) => {
     console.log(`  - Physical Exams: ${physicalExams.length}`);
     console.log(`  - Monitoring Records: ${monitoringRecords.length}`);
     console.log(`  - Certificate Records: ${certificateRecords.length}`);
+    console.log(`  - Medicine Issuances: ${medicineIssuances.length}`);
+    console.log(`  - Laboratory Requests: ${laboratoryRequests.length}`);
+    console.log(`  - Pharmacy Inventory: ${pharmacyInventory.length}`);
     console.log(`  - Notifications: ${notifications.length}`);
 
     // 2. Compile all data into a single JSON object
@@ -75,13 +87,16 @@ export const createSystemBackup = async (req, res) => {
       metadata: {
         date: new Date().toISOString(),
         admin: req.user.username || "System Admin",
-        totalCollections: 5,
+        totalCollections: 8,
       },
       collections: {
         users: users,
         physicalExams: physicalExams,
         monitoringRecords: monitoringRecords,
         certificateRecords: certificateRecords,
+        medicineIssuances: medicineIssuances,
+        laboratoryRequests: laboratoryRequests,
+        pharmacyInventory: pharmacyInventory,
         notifications: notifications,
       },
     };

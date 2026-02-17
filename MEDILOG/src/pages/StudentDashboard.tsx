@@ -5,6 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import "../styles/studentportal.css";
 import { medicalAPI, userAPI } from "../services/api";
 import FaceCaptureModal from "../components/common/FaceCaptureModal";
+import LoadingOverlay from "../components/common/LoadingOverlay";
 
 // --- Student Sub-Components ---
 import StudentSidebar from "../components/student_comp/StudentSidebar";
@@ -36,6 +37,7 @@ const StudentDashboard: React.FC = () => {
 
   // --- Navigation State ---
   const [activeView, setActiveView] = useState<StudentView>("landing");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   // --- History Data ---
   const [newStudentHistory, setNewStudentHistory] = useState<NewStudentData[]>(
@@ -64,14 +66,18 @@ const StudentDashboard: React.FC = () => {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [showFaceCaptureModal, setShowFaceCaptureModal] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ===================== HANDLERS =====================
 
   const handleLogout = () => {
-    logout();
-    navigate("/");
+    setLoggingOut(true);
+    setTimeout(() => {
+      logout();
+      navigate("/");
+    }, 1200);
   };
 
   // --- Form Submit Handlers ---
@@ -461,168 +467,190 @@ const StudentDashboard: React.FC = () => {
 
   // ===================== JSX =====================
   return (
-    <div className="d-flex">
-      {/* --- Sidebar --- */}
-      <StudentSidebar
-        activeView={activeView}
-        setActiveView={setActiveView}
-        unreadCount={unreadCount}
-        onNotificationsClick={handleNotificationsClick}
-        onLogout={handleLogout}
-      />
+    <>
+      <LoadingOverlay show={loggingOut} message="Signing out..." />
+      <div className="d-flex">
+        {/* --- Sidebar --- */}
+        <StudentSidebar
+          activeView={activeView}
+          setActiveView={setActiveView}
+          unreadCount={unreadCount}
+          onNotificationsClick={handleNotificationsClick}
+          onLogout={handleLogout}
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={() => setSidebarCollapsed((prev) => !prev)}
+        />
 
-      {/* --- Main Container --- */}
-      <div className="flex-grow-1 d-flex flex-column">
-        {/* Header */}
-        <header className="main-header d-flex justify-content-between align-items-center">
-          <div className="header-greeting">
-            {activeView === "landing" ? (
-              <>
-                <h2>Hello, {user?.username.split(" ")[0]}! 👋</h2>
-                <p className="mb-0">Welcome to your student health portal.</p>
-              </>
-            ) : null}
-          </div>
-
-          <div className="user-info d-flex align-items-center gap-3">
-            <div
-              className="position-relative profile-picture-container"
-              onClick={() => setActiveView("profile")}
-              title="View Profile"
-              style={{
-                cursor: "pointer",
-                border: "3px solid var(--text-dark, #000)",
-                borderRadius: "50%",
-                width: "56px",
-                height: "56px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <img
-                src={getAvatarSrc()}
-                alt={user?.username}
-                className="rounded-circle"
-                style={{ width: "50px", height: "50px", objectFit: "cover" }}
-              />
-            </div>
-          </div>
-        </header>
-
-        {/* Main Content */}
-        <div className="content flex-grow-1">{renderView()}</div>
-      </div>
-
-      {/* --- Profile Upload Modal --- */}
-      {showUploadModal && (
-        <div className="modal-backdrop">
-          <div className="modal-content">
-            <div className="modal-header">
-              <h5 className="modal-title">Upload Profile Picture</h5>
+        {/* --- Main Container --- */}
+        <div
+          className={`flex-grow-1 d-flex flex-column ${sidebarCollapsed ? "sidebar-collapsed-margin" : ""}`}
+        >
+          {/* Header */}
+          <header className="main-header d-flex justify-content-between align-items-center">
+            <div className="d-flex align-items-center gap-3">
               <button
-                type="button"
-                className="btn-close"
-                onClick={() => {
-                  setShowUploadModal(false);
-                  setSelectedFile(null);
-                  setUploadError("");
-                }}
-              ></button>
-            </div>
-            <div className="modal-body">
-              {uploadError && (
-                <div className="alert alert-danger mb-3">{uploadError}</div>
-              )}
-
-              <div
-                className={`upload-drop-zone ${
-                  isDragging ? "is-dragging" : ""
-                }`}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-                onClick={triggerFileSelect}
+                className="btn btn-sm btn-outline-success d-flex align-items-center justify-content-center"
+                onClick={() => setSidebarCollapsed((prev) => !prev)}
+                title={sidebarCollapsed ? "Open sidebar" : "Close sidebar"}
+                style={{ width: "38px", height: "38px", borderRadius: "8px" }}
               >
-                <div className="upload-icon">
-                  <i className="bi bi-cloud-arrow-up"></i>
-                </div>
-                <p>Choose a file or drag & drop it here</p>
-                <span className="upload-formats">JPEG, PNG, or JPG only</span>
-                <span className="btn-browse" style={{ pointerEvents: "none" }}>
-                  Browse File
-                </span>
-                <input
-                  type="file"
-                  id="pfpFile"
-                  ref={fileInputRef}
-                  accept="image/png, image/jpeg, image/jpg"
-                  onChange={handleFileSelect}
-                  style={{ display: "none" }}
+                <i className="bi bi-list" style={{ fontSize: "1.3rem" }}></i>
+              </button>
+              <div className="header-greeting">
+                {activeView === "landing" ? (
+                  <>
+                    <h2>Hello, {user?.username.split(" ")[0]}! 👋</h2>
+                    <p className="mb-0">
+                      Welcome to your student health portal.
+                    </p>
+                  </>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="user-info d-flex align-items-center gap-3">
+              <div
+                className="position-relative profile-picture-container"
+                onClick={() => setActiveView("profile")}
+                title="View Profile"
+                style={{
+                  cursor: "pointer",
+                  border: "3px solid var(--text-dark, #000)",
+                  borderRadius: "50%",
+                  width: "56px",
+                  height: "56px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <img
+                  src={getAvatarSrc()}
+                  alt={user?.username}
+                  className="rounded-circle"
+                  style={{ width: "50px", height: "50px", objectFit: "cover" }}
                 />
               </div>
-
-              <div className="text-center my-3">
-                <span className="text-muted">or</span>
-              </div>
-
-              <button
-                type="button"
-                className="btn btn-info w-100 mb-3"
-                onClick={() => setShowFaceCaptureModal(true)}
-              >
-                <i className="bi bi-camera me-2"></i>Capture Photo with Camera
-              </button>
-
-              {selectedFile && (
-                <div className="file-preview">
-                  Selected: {selectedFile.name}
-                </div>
-              )}
             </div>
-            <div className="modal-footer">
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => {
-                  setShowUploadModal(false);
-                  setSelectedFile(null);
-                  setUploadError("");
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn btn-success"
-                onClick={handleUploadSubmit}
-                disabled={!selectedFile || uploading}
-              >
-                {uploading ? (
-                  <>
-                    <span
-                      className="spinner-border spinner-border-sm me-2"
-                      role="status"
-                      aria-hidden="true"
-                    ></span>
-                    Uploading...
-                  </>
-                ) : (
-                  "Upload"
+          </header>
+
+          {/* Main Content */}
+          <div className="content flex-grow-1">{renderView()}</div>
+        </div>
+
+        {/* --- Profile Upload Modal --- */}
+        {showUploadModal && (
+          <div className="modal-backdrop">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">Upload Profile Picture</h5>
+                <button
+                  type="button"
+                  className="btn-close"
+                  onClick={() => {
+                    setShowUploadModal(false);
+                    setSelectedFile(null);
+                    setUploadError("");
+                  }}
+                ></button>
+              </div>
+              <div className="modal-body">
+                {uploadError && (
+                  <div className="alert alert-danger mb-3">{uploadError}</div>
                 )}
-              </button>
+
+                <div
+                  className={`upload-drop-zone ${
+                    isDragging ? "is-dragging" : ""
+                  }`}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  onClick={triggerFileSelect}
+                >
+                  <div className="upload-icon">
+                    <i className="bi bi-cloud-arrow-up"></i>
+                  </div>
+                  <p>Choose a file or drag & drop it here</p>
+                  <span className="upload-formats">JPEG, PNG, or JPG only</span>
+                  <span
+                    className="btn-browse"
+                    style={{ pointerEvents: "none" }}
+                  >
+                    Browse File
+                  </span>
+                  <input
+                    type="file"
+                    id="pfpFile"
+                    ref={fileInputRef}
+                    accept="image/png, image/jpeg, image/jpg"
+                    onChange={handleFileSelect}
+                    style={{ display: "none" }}
+                  />
+                </div>
+
+                <div className="text-center my-3">
+                  <span className="text-muted">or</span>
+                </div>
+
+                <button
+                  type="button"
+                  className="btn btn-info w-100 mb-3"
+                  onClick={() => setShowFaceCaptureModal(true)}
+                >
+                  <i className="bi bi-camera me-2"></i>Capture Photo with Camera
+                </button>
+
+                {selectedFile && (
+                  <div className="file-preview">
+                    Selected: {selectedFile.name}
+                  </div>
+                )}
+              </div>
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => {
+                    setShowUploadModal(false);
+                    setSelectedFile(null);
+                    setUploadError("");
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-success"
+                  onClick={handleUploadSubmit}
+                  disabled={!selectedFile || uploading}
+                >
+                  {uploading ? (
+                    <>
+                      <span
+                        className="spinner-border spinner-border-sm me-2"
+                        role="status"
+                        aria-hidden="true"
+                      ></span>
+                      Uploading...
+                    </>
+                  ) : (
+                    "Upload"
+                  )}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* --- Face Capture Modal --- */}
-      <FaceCaptureModal
-        show={showFaceCaptureModal}
-        onClose={() => setShowFaceCaptureModal(false)}
-        onCapture={handleFaceCapture}
-      />
-    </div>
+        {/* --- Face Capture Modal --- */}
+        <FaceCaptureModal
+          show={showFaceCaptureModal}
+          onClose={() => setShowFaceCaptureModal(false)}
+          onCapture={handleFaceCapture}
+        />
+      </div>
+    </>
   );
 };
 

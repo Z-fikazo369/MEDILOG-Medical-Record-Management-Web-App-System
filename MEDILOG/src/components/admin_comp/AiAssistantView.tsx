@@ -492,27 +492,6 @@ const AiAssistantView: React.FC = () => {
   // ============================================================
   return (
     <div className="ai-assistant-view">
-      {/* ── HEADER ── */}
-      <div className="d-flex align-items-center justify-content-between mb-4">
-        <div className="d-flex align-items-center gap-3">
-          <div className="ai-header-icon">
-            <i
-              className="bi bi-stars text-white"
-              style={{ fontSize: "1.5rem" }}
-            ></i>
-          </div>
-          <div>
-            <h4 className="fw-bold mb-0">AI Medical Assistant</h4>
-            <span className="text-muted small">
-              Audio transcription and image text extraction
-            </span>
-          </div>
-        </div>
-        <span className="ai-powered-badge">
-          <i className="bi bi-stars me-1"></i> AI Powered
-        </span>
-      </div>
-
       {/* ── STATS ── */}
       <div className="row g-3 mb-4">
         <div className="col-6 col-lg-3">

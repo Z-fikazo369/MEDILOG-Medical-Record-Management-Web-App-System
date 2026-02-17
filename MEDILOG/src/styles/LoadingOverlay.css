@@ -1,0 +1,108 @@
+/* ===== LOADING OVERLAY ===== */
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: var(--bg-body, #f4f6f8);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 99999;
+  animation: overlayFadeIn 0.3s ease-out;
+}
+
+@keyframes overlayFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.loading-overlay-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+
+/* --- Spinner Ring --- */
+.loading-spinner {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.spinner-ring {
+  position: absolute;
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  border: 4px solid transparent;
+  border-top-color: var(--primary-color, #198754);
+  border-right-color: var(--primary-color, #198754);
+  animation: spinRing 1s cubic-bezier(0.6, 0.15, 0.3, 0.85) infinite;
+}
+
+.spinner-ring::before {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  border: 3px solid transparent;
+  border-bottom-color: var(--primary-color, #198754);
+  opacity: 0.5;
+  animation: spinRing 0.7s cubic-bezier(0.6, 0.15, 0.3, 0.85) infinite reverse;
+}
+
+@keyframes spinRing {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* --- Center Icon --- */
+.loading-icon {
+  font-size: 1.6rem;
+  color: var(--primary-color, #198754);
+  animation: iconPulse 1.2s ease-in-out infinite;
+}
+
+@keyframes iconPulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
+}
+
+/* --- Message Text --- */
+.loading-message {
+  font-family: "Inter", sans-serif;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text-secondary, #6c757d);
+  letter-spacing: 0.5px;
+  margin: 0;
+  animation: messageFade 1.5s ease-in-out infinite;
+}
+
+@keyframes messageFade {
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}

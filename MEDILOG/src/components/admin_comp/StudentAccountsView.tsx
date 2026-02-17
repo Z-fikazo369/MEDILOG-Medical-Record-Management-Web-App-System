@@ -284,12 +284,6 @@ const StudentAccountsView: React.FC<StudentAccountsViewProps> = ({
               onChange={(e) => setAccountSearchTerm(e.target.value)}
             />
           </div>
-
-          <div className="d-flex gap-2">
-            <button className="btn btn-outline-secondary d-flex align-items-center gap-2 bg-white">
-              <i className="bi bi-funnel"></i> Filter
-            </button>
-          </div>
         </div>
 
         {/* Table Content */}

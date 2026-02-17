@@ -35,7 +35,7 @@ MODEL_DIR = Path(__file__).parent / "models"
 MODEL_DIR.mkdir(exist_ok=True)
 
 MIN_TRAIN_SAMPLES = 10  # Minimum samples to train any model
-MODEL_MAX_AGE_HOURS = 1  # Reuse saved models if less than 1 hour old
+MODEL_MAX_AGE_HOURS = 0  # 0 = always reuse saved model if it exists (never retrain automatically)
 FEATURE_NAMES_VISIT = [
     "month", "day", "weekday", "is_weekend",
     "lag_1", "lag_7", "lag_14",
@@ -44,10 +44,13 @@ FEATURE_NAMES_VISIT = [
 
 
 def _model_is_fresh(model_path):
-    """Check if a saved model file exists and is recent enough to reuse."""
+    """Check if a saved model file exists and is recent enough to reuse.
+    If MODEL_MAX_AGE_HOURS <= 0, any existing model is considered fresh (never expire)."""
     p = Path(model_path)
     if not p.exists():
         return False
+    if MODEL_MAX_AGE_HOURS <= 0:
+        return True  # Never expire — always reuse saved model
     age_hours = (datetime.now().timestamp() - p.stat().st_mtime) / 3600
     return age_hours < MODEL_MAX_AGE_HOURS
 

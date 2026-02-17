@@ -3,6 +3,7 @@ import { useNavigate, useParams, Link } from "react-router-dom";
 import { authAPI } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import Logo from "../Logo";
+import LoadingOverlay from "../common/LoadingOverlay";
 import ReCAPTCHA from "react-google-recaptcha";
 import "../../styles/AuthStyles.css";
 
@@ -21,6 +22,7 @@ const LoginForm: React.FC = () => {
 
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [navigating, setNavigating] = useState(false);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
 
   const isStudent = role === "student";
@@ -60,17 +62,20 @@ const LoginForm: React.FC = () => {
         alert("OTP sent to your email.");
       } else {
         login(response);
+        setNavigating(true);
         const userRole = response.role;
-        if (userRole === "student") {
-          navigate("/student/dashboard");
-        } else {
-          navigate("/admin/dashboard");
-        }
+        setTimeout(() => {
+          if (userRole === "student") {
+            navigate("/student/dashboard");
+          } else {
+            navigate("/admin/dashboard");
+          }
+        }, 1200);
       }
     } catch (err: any) {
       console.error("Login failed", err);
       setError(
-        err.response?.data?.message || "Invalid credentials. Please try again."
+        err.response?.data?.message || "Invalid credentials. Please try again.",
       );
       setCaptchaToken(null);
       recaptchaRef.current?.reset();
@@ -92,12 +97,14 @@ const LoginForm: React.FC = () => {
       });
 
       login(response);
-
-      if (response.role === "student") {
-        navigate("/student/dashboard");
-      } else {
-        navigate("/admin/dashboard");
-      }
+      setNavigating(true);
+      setTimeout(() => {
+        if (response.role === "student") {
+          navigate("/student/dashboard");
+        } else {
+          navigate("/admin/dashboard");
+        }
+      }, 1200);
     } catch (err: any) {
       setError(err.response?.data?.message || "Invalid OTP.");
     } finally {
@@ -118,16 +125,95 @@ const LoginForm: React.FC = () => {
   // --- RENDER OTP FORM ---
   if (showOTP) {
     return (
+      <>
+        <LoadingOverlay show={navigating} message="Signing you in..." />
+        <div className="auth-wrapper">
+          <div className="auth-card-centered" style={{ maxWidth: "600px" }}>
+            {/* Back Button for OTP */}
+            <button
+              className="btn btn-link text-decoration-none mb-3 p-0"
+              onClick={() => setShowOTP(false)}
+              style={{ color: "var(--text-secondary)" }}
+            >
+              <i className="bi bi-arrow-left"></i> Back
+            </button>
+
+            <div className="auth-header">
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "center",
+                  marginBottom: "1rem",
+                }}
+              >
+                <Logo />
+              </div>
+              <h2 className="auth-title">Verify OTP</h2>
+              <p className="auth-subtitle">
+                Enter the 6-digit code sent to <strong>{userEmail}</strong>
+              </p>
+            </div>
+
+            {error && <div className="alert alert-danger">{error}</div>}
+
+            <form onSubmit={handleOTPSubmit} className="auth-form">
+              <div className="form-group">
+                <input
+                  type="text"
+                  className="form-input text-center"
+                  placeholder="000000"
+                  value={otp}
+                  onChange={(e) =>
+                    setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))
+                  }
+                  maxLength={6}
+                  required
+                  autoFocus
+                  style={{
+                    fontSize: "1.5rem",
+                    letterSpacing: "0.5rem",
+                    fontWeight: "bold",
+                  }}
+                />
+              </div>
+
+              <div className="form-group d-flex align-items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="rememberMe"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  style={{ width: "auto" }}
+                />
+                <label htmlFor="rememberMe" className="mb-0 text-muted">
+                  Trust this device
+                </label>
+              </div>
+
+              <button
+                type="submit"
+                className="btn-submit"
+                disabled={loading || otp.length !== 6}
+              >
+                {loading ? "Verifying..." : "Verify Login"}
+              </button>
+            </form>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  // --- RENDER LOGIN FORM ---
+  return (
+    <>
+      <LoadingOverlay show={navigating} message="Signing you in..." />
       <div className="auth-wrapper">
         <div className="auth-card-centered" style={{ maxWidth: "600px" }}>
-          {/* Back Button for OTP */}
-          <button
-            className="btn btn-link text-decoration-none mb-3 p-0"
-            onClick={() => setShowOTP(false)}
-            style={{ color: "var(--text-secondary)" }}
-          >
-            <i className="bi bi-arrow-left"></i> Back
-          </button>
+          {/* ✅ FIX: Home Button inside Card */}
+          <Link to="/" className="btn-back-home">
+            <i className="bi bi-house-door-fill"></i> Home
+          </Link>
 
           <div className="auth-header">
             <div
@@ -139,171 +225,99 @@ const LoginForm: React.FC = () => {
             >
               <Logo />
             </div>
-            <h2 className="auth-title">Verify OTP</h2>
+            <h2 className="auth-title">
+              {isStudent ? "Student Login" : "Staff Portal"}
+            </h2>
             <p className="auth-subtitle">
-              Enter the 6-digit code sent to <strong>{userEmail}</strong>
+              {isStudent ? "" : "Authorized personnel only"}
             </p>
           </div>
 
           {error && <div className="alert alert-danger">{error}</div>}
 
-          <form onSubmit={handleOTPSubmit} className="auth-form">
+          <form onSubmit={handleSubmit} className="auth-form">
             <div className="form-group">
+              <label>Email Address {isStudent && "/ Student ID"}</label>
               <input
                 type="text"
-                className="form-input text-center"
-                placeholder="000000"
-                value={otp}
-                onChange={(e) =>
-                  setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))
+                name="email"
+                className="form-input"
+                placeholder={
+                  isStudent ? "Email or Student ID" : "name@isu.edu.ph"
                 }
-                maxLength={6}
+                value={formData.email}
+                onChange={handleChange}
                 required
-                autoFocus
-                style={{
-                  fontSize: "1.5rem",
-                  letterSpacing: "0.5rem",
-                  fontWeight: "bold",
-                }}
               />
             </div>
 
-            <div className="form-group d-flex align-items-center gap-2">
+            <div className="form-group">
+              <label>Password</label>
               <input
-                type="checkbox"
-                id="rememberMe"
-                checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
-                style={{ width: "auto" }}
+                type="password"
+                name="password"
+                className="form-input"
+                placeholder={
+                  isStudent ? "Enter LRN as password" : "Enter your password"
+                }
+                value={formData.password}
+                onChange={handleChange}
+                required
               />
-              <label htmlFor="rememberMe" className="mb-0 text-muted">
-                Trust this device
-              </label>
+              {isStudent && (
+                <small
+                  className="text-muted d-block mt-1"
+                  style={{ fontSize: "0.8rem" }}
+                >
+                  Default password is your LRN.
+                </small>
+              )}
+            </div>
+
+            <div className="form-group d-flex justify-content-center my-2">
+              <ReCAPTCHA
+                ref={recaptchaRef}
+                sitekey={recaptchaSiteKey}
+                onChange={handleCaptchaChange}
+                theme="light"
+              />
             </div>
 
             <button
               type="submit"
               className="btn-submit"
-              disabled={loading || otp.length !== 6}
+              disabled={loading || !captchaToken}
             >
-              {loading ? "Verifying..." : "Verify Login"}
+              {loading ? "Signing In..." : "Sign In"}
             </button>
           </form>
-        </div>
-      </div>
-    );
-  }
 
-  // --- RENDER LOGIN FORM ---
-  return (
-    <div className="auth-wrapper">
-      <div className="auth-card-centered" style={{ maxWidth: "600px" }}>
-        {/* ✅ FIX: Home Button inside Card */}
-        <Link to="/" className="btn-back-home">
-          <i className="bi bi-house-door-fill"></i> Home
-        </Link>
+          <div className="auth-footer">
+            <p className="mb-2">
+              <Link to="/forgot-password">Forgot Password?</Link>
+            </p>
 
-        <div className="auth-header">
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "center",
-              marginBottom: "1rem",
-            }}
-          >
-            <Logo />
-          </div>
-          <h2 className="auth-title">
-            {isStudent ? "Student Login" : "Staff Portal"}
-          </h2>
-          <p className="auth-subtitle">
-            {isStudent ? "" : "Authorized personnel only"}
-          </p>
-        </div>
-
-        {error && <div className="alert alert-danger">{error}</div>}
-
-        <form onSubmit={handleSubmit} className="auth-form">
-          <div className="form-group">
-            <label>Email Address {isStudent && "/ Student ID"}</label>
-            <input
-              type="text"
-              name="email"
-              className="form-input"
-              placeholder={
-                isStudent ? "Email or Student ID" : "name@isu.edu.ph"
-              }
-              value={formData.email}
-              onChange={handleChange}
-              required
-            />
-          </div>
-
-          <div className="form-group">
-            <label>Password</label>
-            <input
-              type="password"
-              name="password"
-              className="form-input"
-              placeholder={
-                isStudent ? "Enter LRN as password" : "Enter your password"
-              }
-              value={formData.password}
-              onChange={handleChange}
-              required
-            />
-            {isStudent && (
-              <small
-                className="text-muted d-block mt-1"
-                style={{ fontSize: "0.8rem" }}
-              >
-                Default password is your LRN.
-              </small>
-            )}
-          </div>
-
-          <div className="form-group d-flex justify-content-center my-2">
-            <ReCAPTCHA
-              ref={recaptchaRef}
-              sitekey={recaptchaSiteKey}
-              onChange={handleCaptchaChange}
-              theme="light"
-            />
-          </div>
-
-          <button
-            type="submit"
-            className="btn-submit"
-            disabled={loading || !captchaToken}
-          >
-            {loading ? "Signing In..." : "Sign In"}
-          </button>
-        </form>
-
-        <div className="auth-footer">
-          <p className="mb-2">
-            <Link to="/forgot-password">Forgot Password?</Link>
-          </p>
-
-          <div>
-            {isStudent ? (
-              <p className="text-muted">
-                Don't have an account? <Link to="/signup">Sign Up</Link> <br />
-                <span className="small">or</span>{" "}
-                <Link to="/login/admin" className="ms-1">
-                  Staff/Admin Login
-                </Link>
-              </p>
-            ) : (
-              <p>
-                Not a staff member?{" "}
-                <Link to="/login/student">Student Login</Link>
-              </p>
-            )}
+            <div>
+              {isStudent ? (
+                <p className="text-muted">
+                  Don't have an account? <Link to="/signup">Sign Up</Link>{" "}
+                  <br />
+                  <span className="small">or</span>{" "}
+                  <Link to="/login/admin" className="ms-1">
+                    Staff/Admin Login
+                  </Link>
+                </p>
+              ) : (
+                <p>
+                  Not a staff member?{" "}
+                  <Link to="/login/student">Student Login</Link>
+                </p>
+              )}
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 };
 

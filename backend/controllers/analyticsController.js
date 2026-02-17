@@ -197,8 +197,26 @@ export const getDashboardInsights = async (req, res) => {
 };
 
 // ==================== DASHBOARD OVERVIEW (All-in-One) ====================
+// In-memory cache for dashboard overview
+let _overviewCache = null;
+let _overviewCacheTimestamp = 0;
+const OVERVIEW_CACHE_TTL = 3 * 60 * 1000; // 3 minutes
+
 export const getDashboardOverview = async (req, res) => {
   try {
+    // ========== CHECK CACHE FIRST ==========
+    const forceRefresh = req.query.force === "true";
+    if (
+      !forceRefresh &&
+      _overviewCache &&
+      Date.now() - _overviewCacheTimestamp < OVERVIEW_CACHE_TTL
+    ) {
+      console.log(
+        `[Dashboard] Returning cached overview (age: ${Math.round((Date.now() - _overviewCacheTimestamp) / 1000)}s)`,
+      );
+      return res.json(_overviewCache);
+    }
+
     const today = new Date();
     const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
     startOfMonth.setHours(0, 0, 0, 0);
@@ -224,7 +242,7 @@ export const getDashboardOverview = async (req, res) => {
         User.countDocuments({ role: "staff", status: "pending" }),
       ]);
 
-    // ========== 2. RECORD COUNTS (This Month vs Last Month) ==========
+    // ========== 2. RECORD COUNTS (This Month vs Last Month) — PARALLELIZED ==========
     const recordModels = [
       { key: "physicalExam", model: PhysicalExam, label: "Physical Exams" },
       { key: "monitoring", model: MedicalMonitoring, label: "Monitoring" },
@@ -246,7 +264,26 @@ export const getDashboardOverview = async (req, res) => {
     let totalRecordsLastMonth = 0;
     let totalRecordsAllTime = 0;
 
-    for (const { key, model } of recordModels) {
+    // Run ALL record model queries in parallel instead of sequential for-loop
+    const allRecordResults = await Promise.all(
+      recordModels.map(({ model }) =>
+        Promise.all([
+          model.countDocuments({
+            createdAt: { $gte: startOfMonth, $lte: endOfMonth },
+          }),
+          model.countDocuments({
+            createdAt: { $gte: startOfLastMonth, $lte: endOfLastMonth },
+          }),
+          model.countDocuments(),
+          model.countDocuments({ status: "pending" }),
+          model.countDocuments({ status: "approved" }),
+          model.countDocuments({ status: "rejected" }),
+          model.countDocuments({ createdAt: { $gte: startOfToday } }),
+        ]),
+      ),
+    );
+
+    recordModels.forEach(({ key }, idx) => {
       const [
         thisMonth,
         lastMonth,
@@ -255,19 +292,7 @@ export const getDashboardOverview = async (req, res) => {
         approved,
         rejected,
         todayCount,
-      ] = await Promise.all([
-        model.countDocuments({
-          createdAt: { $gte: startOfMonth, $lte: endOfMonth },
-        }),
-        model.countDocuments({
-          createdAt: { $gte: startOfLastMonth, $lte: endOfLastMonth },
-        }),
-        model.countDocuments(),
-        model.countDocuments({ status: "pending" }),
-        model.countDocuments({ status: "approved" }),
-        model.countDocuments({ status: "rejected" }),
-        model.countDocuments({ createdAt: { $gte: startOfToday } }),
-      ]);
+      ] = allRecordResults[idx];
       recordStats[key] = {
         thisMonth,
         lastMonth,
@@ -280,7 +305,7 @@ export const getDashboardOverview = async (req, res) => {
       totalRecordsThisMonth += thisMonth;
       totalRecordsLastMonth += lastMonth;
       totalRecordsAllTime += allTime;
-    }
+    });
 
     // ========== 3. PENDING RECORDS TOTAL ==========
     const totalPendingRecords = Object.values(recordStats).reduce(
@@ -309,34 +334,42 @@ export const getDashboardOverview = async (req, res) => {
         .slice(0, 8),
     };
 
-    // ========== 5. MONTHLY TRENDS (Last 6 months) ==========
-    const monthlyTrends = [];
+    // ========== 5. MONTHLY TRENDS (Last 6 months) — PARALLELIZED ==========
+    const monthRanges = [];
     for (let i = 5; i >= 0; i--) {
       const mStart = new Date(today.getFullYear(), today.getMonth() - i, 1);
       mStart.setHours(0, 0, 0, 0);
       const mEnd = new Date(today.getFullYear(), today.getMonth() - i + 1, 0);
       mEnd.setHours(23, 59, 59, 999);
       const monthLabel = mStart.toLocaleString("en-US", { month: "short" });
+      monthRanges.push({ mStart, mEnd, monthLabel });
+    }
 
-      const [pe, mon, cert, mi, lr] = await Promise.all([
-        PhysicalExam.countDocuments({
-          createdAt: { $gte: mStart, $lte: mEnd },
-        }),
-        MedicalMonitoring.countDocuments({
-          createdAt: { $gte: mStart, $lte: mEnd },
-        }),
-        MedicalCertificate.countDocuments({
-          createdAt: { $gte: mStart, $lte: mEnd },
-        }),
-        MedicineIssuance.countDocuments({
-          createdAt: { $gte: mStart, $lte: mEnd },
-        }),
-        LaboratoryRequest.countDocuments({
-          createdAt: { $gte: mStart, $lte: mEnd },
-        }),
-      ]);
+    const allMonthResults = await Promise.all(
+      monthRanges.map(({ mStart, mEnd }) =>
+        Promise.all([
+          PhysicalExam.countDocuments({
+            createdAt: { $gte: mStart, $lte: mEnd },
+          }),
+          MedicalMonitoring.countDocuments({
+            createdAt: { $gte: mStart, $lte: mEnd },
+          }),
+          MedicalCertificate.countDocuments({
+            createdAt: { $gte: mStart, $lte: mEnd },
+          }),
+          MedicineIssuance.countDocuments({
+            createdAt: { $gte: mStart, $lte: mEnd },
+          }),
+          LaboratoryRequest.countDocuments({
+            createdAt: { $gte: mStart, $lte: mEnd },
+          }),
+        ]),
+      ),
+    );
 
-      monthlyTrends.push({
+    const monthlyTrends = monthRanges.map(({ monthLabel }, idx) => {
+      const [pe, mon, cert, mi, lr] = allMonthResults[idx];
+      return {
         month: monthLabel,
         physicalExam: pe,
         monitoring: mon,
@@ -344,8 +377,8 @@ export const getDashboardOverview = async (req, res) => {
         medicineIssuance: mi,
         laboratoryRequest: lr,
         total: pe + mon + cert + mi + lr,
-      });
-    }
+      };
+    });
 
     // ========== 6. STATUS DISTRIBUTION (All records combined) ==========
     const statusDistribution = {
@@ -426,7 +459,7 @@ export const getDashboardOverview = async (req, res) => {
           : "0";
 
     // ========== RESPONSE ==========
-    res.json({
+    const overviewResult = {
       accounts: {
         totalStudents,
         totalStaff,
@@ -453,7 +486,13 @@ export const getDashboardOverview = async (req, res) => {
       },
       topCourses,
       genderDistribution,
-    });
+    };
+
+    // Cache the result
+    _overviewCache = overviewResult;
+    _overviewCacheTimestamp = Date.now();
+
+    res.json(overviewResult);
   } catch (error) {
     console.error("❌ Error fetching dashboard overview:", error);
     res.status(500).json({ message: "Failed to get dashboard overview." });
@@ -465,7 +504,7 @@ export const getDashboardOverview = async (req, res) => {
 // In-memory cache for predictive analytics results
 let _predictiveCache = null;
 let _predictiveCacheTimestamp = 0;
-const PREDICTIVE_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+const PREDICTIVE_CACHE_TTL = 2 * 60 * 60 * 1000; // 2 hours — CatBoost results don't change, safe for presentations
 
 function getCachedPredictive() {
   if (

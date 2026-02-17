@@ -135,13 +135,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
   return (
     <div className="fade-in">
       {/* ===== HEADER ===== */}
-      <div className="d-flex justify-content-between align-items-end mb-4">
-        <div>
-          <h4 className="fw-bold mb-1">Dashboard Overview</h4>
-          <p className="text-muted mb-0 small">
-            Comprehensive system statistics and insights
-          </p>
-        </div>
+      <div className="d-flex justify-content-end align-items-end mb-4">
         <div className="d-flex align-items-center gap-2">
           <span className="badge bg-success-subtle text-success border border-success-subtle px-3 py-2">
             <i className="bi bi-clock me-1"></i>

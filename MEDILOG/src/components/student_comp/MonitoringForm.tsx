@@ -12,10 +12,7 @@ const MonitoringForm: React.FC<MonitoringFormProps> = ({
   setActiveView,
 }) => {
   return (
-    <div
-      className="section onlineFormSection fade-in"
-      style={{ maxWidth: "720px", margin: "0 auto" }}
-    >
+    <div className="section onlineFormSection fade-in">
       {/* Outer Title */}
       <div className="mb-4">
         <h4 className="text-success fw-bold">Medical Monitoring</h4>

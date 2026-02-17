@@ -98,10 +98,7 @@ const MedicineIssuanceForm: React.FC<MedicineIssuanceFormProps> = ({
   };
 
   return (
-    <div
-      className="section onlineFormSection fade-in"
-      style={{ maxWidth: "900px", margin: "0 auto" }}
-    >
+    <div className="section onlineFormSection fade-in">
       {/* Outer Title */}
       <div className="mb-4">
         <h4 className="text-success fw-bold">Medicine Issuance</h4>

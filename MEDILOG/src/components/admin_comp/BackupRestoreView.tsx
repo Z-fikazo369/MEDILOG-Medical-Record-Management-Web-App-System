@@ -235,7 +235,7 @@ const BackupRestoreView: React.FC<BackupRestoreViewProps> = ({
               <ul className="list-unstyled">
                 <li>
                   <i className="bi bi-check-circle-fill text-success me-2"></i>{" "}
-                  Student Account Profiles and Verification
+                  User Accounts (Students & Staff)
                 </li>
                 <li>
                   <i className="bi bi-check-circle-fill text-success me-2"></i>{" "}
@@ -251,11 +251,19 @@ const BackupRestoreView: React.FC<BackupRestoreViewProps> = ({
                 </li>
                 <li>
                   <i className="bi bi-check-circle-fill text-success me-2"></i>{" "}
-                  System Activity/Audit Logs
+                  Medicine Issuance Records
                 </li>
                 <li>
                   <i className="bi bi-check-circle-fill text-success me-2"></i>{" "}
-                  System Configuration and Settings
+                  Laboratory Request Records
+                </li>
+                <li>
+                  <i className="bi bi-check-circle-fill text-success me-2"></i>{" "}
+                  Pharmacy Inventory
+                </li>
+                <li>
+                  <i className="bi bi-check-circle-fill text-success me-2"></i>{" "}
+                  System Notifications
                 </li>
               </ul>
             </div>
