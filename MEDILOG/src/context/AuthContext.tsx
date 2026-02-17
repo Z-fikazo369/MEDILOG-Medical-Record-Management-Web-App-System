@@ -21,8 +21,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   useEffect(() => {
     const initAuth = async () => {
       try {
-        const storedUser = localStorage.getItem("authUser");
-        const storedToken = localStorage.getItem("authToken");
+        const storedUser = sessionStorage.getItem("authUser");
+        const storedToken = sessionStorage.getItem("authToken");
 
         if (storedUser && storedToken) {
           // I-restore ang user data
@@ -30,8 +30,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         }
       } catch (error) {
         console.error("Auth restoration failed", error);
-        localStorage.removeItem("authUser");
-        localStorage.removeItem("authToken");
+        sessionStorage.removeItem("authUser");
+        sessionStorage.removeItem("authToken");
       } finally {
         setLoading(false); // ✅ Tapos na mag-load, pwede na mag-render
       }
@@ -43,14 +43,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const login = (authData: AuthResponse) => {
     const { user, token } = authData;
     setUser(user);
-    localStorage.setItem("authUser", JSON.stringify(user));
-    localStorage.setItem("authToken", token);
+    sessionStorage.setItem("authUser", JSON.stringify(user));
+    sessionStorage.setItem("authToken", token);
   };
 
   const logout = () => {
     setUser(null);
-    localStorage.removeItem("authUser");
-    localStorage.removeItem("authToken");
+    sessionStorage.removeItem("authUser");
+    sessionStorage.removeItem("authToken");
     window.location.href = "/"; // Force redirect to home
   };
 
@@ -60,7 +60,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     <AuthContext.Provider
       value={{ user, loading, login, logout, isAuthenticated }}
     >
-      {children}
+      {/* ✅ HABANG LOADING, WAG MAG-RENDER NG ANAK (DASHBOARD) */}
+      {loading ? (
+        <div className="d-flex justify-content-center align-items-center vh-100">
+          <div className="spinner-border text-success" role="status">
+            <span className="visually-hidden">Loading...</span>
+          </div>
+        </div>
+      ) : (
+        children
+      )}
     </AuthContext.Provider>
   );
 };

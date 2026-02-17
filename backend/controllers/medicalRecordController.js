@@ -1,8 +1,9 @@
 import PhysicalExam from "../models/PhysicalExam.js";
 import MedicalMonitoring from "../models/MedicalMonitoring.js";
 import MedicalCertificate from "../models/MedicalCertificate.js";
+import MedicineIssuance from "../models/MedicineIssuance.js";
+import LaboratoryRequest from "../models/LaboratoryRequest.js";
 import AdminActivityLog from "../models/AdminActivityLog.js";
-import { kmeans } from "ml-kmeans";
 import { Parser } from "json2csv";
 import ExcelJS from "exceljs";
 import { createNotification } from "./notificationController.js";
@@ -17,9 +18,47 @@ const getModel = (recordType) => {
       return MedicalMonitoring;
     case "certificate":
       return MedicalCertificate;
+    case "medicineIssuance":
+      return MedicineIssuance;
+    case "laboratoryRequest":
+      return LaboratoryRequest;
     default:
       throw new Error("Invalid record type");
   }
+};
+
+// ✅ Helper to build filter query from request query params
+const buildFilterQuery = (query) => {
+  const filter = {};
+
+  if (query.status) filter.status = query.status;
+  if (query.gender)
+    filter.gender = { $regex: new RegExp(`^${query.gender}$`, "i") };
+  if (query.sex) filter.sex = { $regex: new RegExp(`^${query.sex}$`, "i") };
+  if (query.course) filter.course = { $regex: new RegExp(query.course, "i") };
+  if (query.year) filter.year = { $regex: new RegExp(query.year, "i") };
+  if (query.degree) filter.degree = { $regex: new RegExp(query.degree, "i") };
+
+  // Date range filter (works with date, issueDate, or createdAt)
+  if (query.dateFrom || query.dateTo) {
+    const dateField = query.dateField || "createdAt";
+    const dateFilter = {};
+    if (query.dateFrom) dateFilter.$gte = query.dateFrom;
+    if (query.dateTo) dateFilter.$lte = query.dateTo;
+
+    if (dateField === "createdAt") {
+      // createdAt is a real Date type
+      if (query.dateFrom) dateFilter.$gte = new Date(query.dateFrom);
+      if (query.dateTo) {
+        const toDate = new Date(query.dateTo);
+        toDate.setHours(23, 59, 59, 999);
+        dateFilter.$lte = toDate;
+      }
+    }
+    filter[dateField] = dateFilter;
+  }
+
+  return filter;
 };
 
 // ✅ Helper to log admin activity
@@ -86,11 +125,21 @@ export async function getStudentRecords(req, res) {
     const certificates = await MedicalCertificate.find({ studentId }).sort({
       createdAt: -1,
     });
+    const medicineIssuances = await MedicineIssuance.find({ studentId }).sort({
+      createdAt: -1,
+    });
+    const laboratoryRequests = await LaboratoryRequest.find({ studentId }).sort(
+      {
+        createdAt: -1,
+      },
+    );
 
     res.json({
       physicalExams,
       monitoring,
       certificates,
+      medicineIssuances,
+      laboratoryRequests,
     });
   } catch (error) {
     console.error("❌ Get student records error:", error);
@@ -114,22 +163,25 @@ export async function getAllRecords(req, res) {
 
     const sortOptions = {};
     sortByKeys.forEach((key, index) => {
-      // Tiyakin na may katapat na order, kung wala, default sa 'desc'
       const order = sortOrderValues[index] || "desc";
       sortOptions[key] = order === "asc" ? 1 : -1;
     });
     // --- End ng Multi-Sort Logic ---
 
+    // --- BAGO: Filter Logic ---
+    const filterQuery = buildFilterQuery(req.query);
+    // --- End ng Filter Logic ---
+
     if (type) {
       const Model = getModel(type);
 
-      const records = await Model.find()
-        .populate("studentId", "username email")
-        .sort(sortOptions) // 👈 Ginamit ang bagong multi-sort options
+      const records = await Model.find(filterQuery)
+        .populate("studentId", "username email profilePictureUrl")
+        .sort(sortOptions)
         .skip(skip)
         .limit(limit);
 
-      const totalCount = await Model.countDocuments();
+      const totalCount = await Model.countDocuments(filterQuery);
       const totalPages = Math.ceil(totalCount / limit);
 
       return res.json({
@@ -169,9 +221,15 @@ export async function updateRecord(req, res) {
       if (recordType === "physicalExam") formName = "Physical Exam";
       if (recordType === "monitoring") formName = "Medical Monitoring";
       if (recordType === "certificate") formName = "Medical Certificate";
+      if (recordType === "medicineIssuance") formName = "Medicine Issuance";
+      if (recordType === "laboratoryRequest") formName = "Laboratory Request";
 
       if (updates.status && updates.status !== originalRecord.status) {
-        message = `Your ${formName} submission has been ${updates.status}.`;
+        message = `Your ${formName} has been ${updates.status}.`;
+        if (updates.status === "approved") {
+          message +=
+            " Please proceed to the infirmary within the day to complete the process. This schedule is valid for today only.";
+        }
       } else if (
         recordType === "certificate" &&
         updates.diagnosis &&
@@ -184,6 +242,12 @@ export async function updateRecord(req, res) {
         updates.meds !== originalRecord.meds
       ) {
         message = `An admin has added treatment notes to your ${formName}.`;
+      } else if (
+        recordType === "medicineIssuance" &&
+        updates.diagnosis &&
+        updates.diagnosis !== originalRecord.diagnosis
+      ) {
+        message = `An admin has added a diagnosis to your ${formName}.`;
       }
 
       if (message) {
@@ -191,7 +255,7 @@ export async function updateRecord(req, res) {
           updatedRecord.studentId,
           message,
           updatedRecord._id,
-          recordType
+          recordType,
         );
       }
     } catch (notifError) {
@@ -276,7 +340,7 @@ export async function bulkUpdateStatus(req, res) {
 
     const result = await Model.updateMany(
       { _id: { $in: ids } },
-      { $set: updateData }
+      { $set: updateData },
     );
 
     if (result.modifiedCount > 0) {
@@ -286,14 +350,20 @@ export async function bulkUpdateStatus(req, res) {
       if (recordType === "physicalExam") formName = "Physical Exam";
       if (recordType === "monitoring") formName = "Medical Monitoring";
       if (recordType === "certificate") formName = "Medical Certificate";
+      if (recordType === "medicineIssuance") formName = "Medicine Issuance";
+      if (recordType === "laboratoryRequest") formName = "Laboratory Request";
 
       for (const record of updatedRecords) {
-        const message = `Your ${formName} submission has been ${status}.`;
+        let message = `Your ${formName} has been ${status}.`;
+        if (status === "approved") {
+          message +=
+            " Please proceed to the infirmary within the day to complete the process. This schedule is valid for today only.";
+        }
         await createNotification(
           record.studentId,
           message,
           record._id,
-          recordType
+          recordType,
         );
       }
     }
@@ -316,500 +386,6 @@ export async function bulkUpdateStatus(req, res) {
 }
 
 // ==================== ANALYTICS & CLUSTERING ====================
-
-// Severity scoring based on action/diagnosis
-const calculateSeverityScore = (action, diagnosis, meds) => {
-  let score = 0;
-
-  const actionLower = (action || "").toLowerCase();
-  const diagnosisLower = (diagnosis || "").toLowerCase();
-  const medsLower = (meds || "").toLowerCase();
-
-  // Check for emergency keywords
-  if (
-    actionLower.includes("emergency") ||
-    actionLower.includes("hospital") ||
-    diagnosisLower.includes("severe") ||
-    diagnosisLower.includes("critical")
-  ) {
-    score += 5;
-  } else if (
-    actionLower.includes("referral") ||
-    actionLower.includes("refer")
-  ) {
-    score += 4;
-  } else if (
-    medsLower.length > 0 ||
-    actionLower.includes("treatment") ||
-    actionLower.includes("medication")
-  ) {
-    score += 3;
-  } else if (
-    actionLower.includes("observation") ||
-    actionLower.includes("monitor")
-  ) {
-    score += 2;
-  } else {
-    score += 1; // First aid or consultation only
-  }
-
-  return score;
-};
-
-// Normalize features to 0-1 range
-const normalizeFeatures = (data, min, max) => {
-  if (max === min) return 0.5; // Avoid division by zero
-  return (data - min) / (max - min);
-};
-
-// Standard scaling (z-score normalization)
-const standardScale = (value, mean, stdDev) => {
-  if (stdDev === 0) return 0;
-  return (value - mean) / stdDev;
-};
-
-// ==================== AUTOMATED K SELECTION ====================
-
-/**
- * Calculate Within-Cluster Sum of Squares (WCSS) for Elbow Method
- */
-const calculateWCSS = (data, centroids, clusters) => {
-  let wcss = 0;
-  data.forEach((point, idx) => {
-    const clusterIdx = clusters[idx];
-    const centroid = centroids[clusterIdx];
-    const distance = euclideanDistance(point, centroid);
-    wcss += distance * distance;
-  });
-  return wcss;
-};
-
-const euclideanDistance = (a, b) => {
-  return Math.sqrt(a.reduce((sum, val, i) => sum + Math.pow(val - b[i], 2), 0));
-};
-
-/**
- * Calculate Silhouette Score for a clustering result
- */
-const calculateSilhouetteScore = (data, clusters, centroids) => {
-  const n = data.length;
-  if (n <= 1) return 0;
-
-  let totalScore = 0;
-
-  for (let i = 0; i < n; i++) {
-    const point = data[i];
-    const cluster = clusters[i];
-
-    // Calculate a(i): average distance to points in same cluster
-    const sameCluster = data.filter(
-      (_, idx) => clusters[idx] === cluster && idx !== i
-    );
-    const a =
-      sameCluster.length > 0
-        ? sameCluster.reduce((sum, p) => sum + euclideanDistance(point, p), 0) /
-          sameCluster.length
-        : 0;
-
-    // Calculate b(i): minimum average distance to points in other clusters
-    const uniqueClusters = [...new Set(clusters)].filter((c) => c !== cluster);
-    let b = Infinity;
-
-    for (const otherCluster of uniqueClusters) {
-      const otherPoints = data.filter(
-        (_, idx) => clusters[idx] === otherCluster
-      );
-      if (otherPoints.length > 0) {
-        const avgDist =
-          otherPoints.reduce((sum, p) => sum + euclideanDistance(point, p), 0) /
-          otherPoints.length;
-        b = Math.min(b, avgDist);
-      }
-    }
-
-    // Silhouette coefficient for point i
-    const s = b === Infinity ? 0 : (b - a) / Math.max(a, b);
-    totalScore += s;
-  }
-
-  return totalScore / n;
-};
-
-/**
- * Determine optimal k using Elbow + Silhouette method
- */
-const findOptimalK = (features, maxK = 8) => {
-  if (features.length < 4) {
-    return { k: 2, method: "minimum", scores: [] };
-  }
-
-  const minK = 2;
-  const actualMaxK = Math.min(maxK, Math.floor(features.length / 2));
-
-  const results = [];
-
-  for (let k = minK; k <= actualMaxK; k++) {
-    try {
-      const result = kmeans(features, k, {
-        initialization: "kmeans++",
-        maxIterations: 100,
-      });
-
-      const wcss = calculateWCSS(features, result.centroids, result.clusters);
-      const silhouette = calculateSilhouetteScore(
-        features,
-        result.clusters,
-        result.centroids
-      );
-
-      results.push({
-        k,
-        wcss,
-        silhouette,
-        iterations: result.iterations,
-      });
-    } catch (error) {
-      console.error(`Error calculating k=${k}:`, error);
-    }
-  }
-
-  // Find elbow point (maximum rate of change decrease)
-  let optimalK = minK;
-  let maxImprovement = 0;
-
-  for (let i = 1; i < results.length - 1; i++) {
-    const improvement = results[i - 1].wcss - results[i].wcss;
-    const nextImprovement = results[i].wcss - results[i + 1].wcss;
-    const elbowScore = improvement - nextImprovement;
-
-    if (elbowScore > maxImprovement) {
-      maxImprovement = elbowScore;
-      optimalK = results[i].k;
-    }
-  }
-
-  // Use silhouette score as tiebreaker (prefer higher silhouette)
-  const topCandidates = results
-    .filter((r) => Math.abs(r.k - optimalK) <= 1)
-    .sort((a, b) => b.silhouette - a.silhouette);
-
-  return {
-    k: topCandidates[0]?.k || optimalK,
-    method: "elbow+silhouette",
-    scores: results,
-    elbowK: optimalK,
-    bestSilhouetteK: results.sort((a, b) => b.silhouette - a.silhouette)[0]?.k,
-  };
-};
-
-export async function getEnhancedClusteringAnalysis(req, res) {
-  try {
-    const { autoK = true, k = 3 } = req.query;
-
-    // ✅✅✅ BAGONG DATE LOGIC (CURRENT MONTH) ✅✅✅
-    const today = new Date();
-    // Unang araw ng kasalukuyang buwan (e.g., Nov 1, 2025 at 00:00:00)
-    const startDate = new Date(today.getFullYear(), today.getMonth(), 1);
-    startDate.setHours(0, 0, 0, 0);
-
-    // Huling araw ng kasalukuyang buwan (e.g., Nov 30, 2025 at 23:59:59)
-    const endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-    endDate.setHours(23, 59, 59, 999);
-
-    const period = `Current Month (${today.toLocaleString("en-US", {
-      month: "long",
-    })})`;
-    // --- END NG BAGONG DATE LOGIC ---
-
-    // Fetch all records across all forms for each student
-    const [physicalRecords, monitoringRecords, certificateRecords] =
-      await Promise.all([
-        // Ginamit ang bagong date range filter
-        PhysicalExam.find({ createdAt: { $gte: startDate, $lte: endDate } })
-          .populate("studentId")
-          .lean(),
-        MedicalMonitoring.find({
-          createdAt: { $gte: startDate, $lte: endDate },
-        })
-          .populate("studentId")
-          .lean(),
-        MedicalCertificate.find({
-          createdAt: { $gte: startDate, $lte: endDate },
-        })
-          .populate("studentId")
-          .lean(),
-      ]);
-
-    // Group by student
-    const studentData = {};
-
-    // Process Physical Exams
-    physicalRecords.forEach((r) => {
-      const id = r.studentId?._id?.toString() || r.studentEmail;
-      if (!studentData[id]) {
-        studentData[id] = {
-          studentId: id,
-          name: r.studentName,
-          email: r.studentEmail,
-          gender: r.gender,
-          course: r.course,
-          year: r.year,
-          visits: [],
-          diagnoses: new Set(),
-          symptoms: new Set(),
-        };
-      }
-      studentData[id].visits.push({
-        date: r.createdAt,
-        type: "physical",
-        severity: 1,
-      });
-    });
-
-    // Process Monitoring
-    monitoringRecords.forEach((r) => {
-      const id = r.studentId?._id?.toString() || r.studentEmail;
-      if (!studentData[id]) {
-        studentData[id] = {
-          studentId: id,
-          name: r.studentName,
-          email: r.studentEmail,
-          gender: r.sex,
-          visits: [],
-          diagnoses: new Set(),
-          symptoms: new Set(),
-        };
-      }
-
-      const severity = calculateSeverityScore(r.action, "", r.meds);
-      studentData[id].visits.push({
-        date: r.createdAt,
-        type: "monitoring",
-        severity,
-      });
-
-      if (r.symptoms) studentData[id].symptoms.add(r.symptoms.toLowerCase());
-    });
-
-    // Process Certificates
-    certificateRecords.forEach((r) => {
-      const id = r.studentId?._id?.toString() || r.studentEmail;
-      if (!studentData[id]) {
-        studentData[id] = {
-          studentId: id,
-          name: r.name,
-          email: r.studentEmail,
-          gender: r.sex,
-          age: r.age,
-          visits: [],
-          diagnoses: new Set(),
-          symptoms: new Set(),
-        };
-      }
-
-      const severity = calculateSeverityScore("", r.diagnosis, "");
-      studentData[id].visits.push({
-        date: r.createdAt,
-        type: "certificate",
-        severity,
-      });
-
-      if (r.diagnosis) studentData[id].diagnoses.add(r.diagnosis.toLowerCase());
-    });
-
-    const students = Object.values(studentData);
-
-    if (students.length < 2) {
-      return res.json({
-        message: "Not enough student data for clustering",
-        studentCount: students.length,
-        clusters: [],
-      });
-    }
-
-    // Extract features for clustering
-    const features = [];
-    const studentIds = [];
-
-    students.forEach((student) => {
-      const visitFrequency = student.visits.length;
-      const uniqueDiagnoses = student.diagnoses.size;
-      const uniqueSymptoms = student.symptoms.size;
-      const avgSeverity =
-        student.visits.reduce((sum, v) => sum + v.severity, 0) / visitFrequency;
-
-      // Days since last visit
-      const lastVisit = new Date(
-        Math.max(...student.visits.map((v) => new Date(v.date)))
-      );
-      const daysSinceLastVisit =
-        (new Date() - lastVisit) / (1000 * 60 * 60 * 24);
-
-      // Gender encoding
-      const genderEncoded =
-        student.gender === "Male" ? 0 : student.gender === "Female" ? 1 : 0.5;
-
-      features.push([
-        visitFrequency,
-        uniqueDiagnoses,
-        uniqueSymptoms,
-        avgSeverity,
-        daysSinceLastVisit,
-        genderEncoded,
-      ]);
-
-      studentIds.push(student.studentId);
-    });
-
-    // Normalize features
-    const featureStats = features[0].map((_, colIdx) => {
-      const column = features.map((row) => row[colIdx]);
-      const mean = column.reduce((a, b) => a + b, 0) / column.length;
-      const variance =
-        column.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) /
-        column.length;
-      const stdDev = Math.sqrt(variance);
-      const min = Math.min(...column);
-      const max = Math.max(...column);
-      return { mean, stdDev, min, max };
-    });
-
-    const normalizedFeatures = features.map((row) =>
-      row.map((val, idx) =>
-        standardScale(val, featureStats[idx].mean, featureStats[idx].stdDev)
-      )
-    );
-
-    // Determine optimal k
-    let optimalK;
-    let kSelectionResult;
-
-    if (autoK === "true" || autoK === true) {
-      // Assuming findOptimalK is defined elsewhere in medicalRecordController.js
-      kSelectionResult = findOptimalK(normalizedFeatures);
-      optimalK = kSelectionResult.k;
-    } else {
-      optimalK = parseInt(k);
-    }
-
-    // Perform clustering
-    const clusterResult = kmeans(normalizedFeatures, optimalK, {
-      initialization: "kmeans++",
-      maxIterations: 100,
-    });
-
-    // Analyze clusters and assign labels
-    const clusterGroups = {};
-
-    clusterResult.clusters.forEach((clusterIdx, idx) => {
-      if (!clusterGroups[clusterIdx]) {
-        clusterGroups[clusterIdx] = {
-          id: clusterIdx,
-          students: [],
-          centroid: clusterResult.centroids[clusterIdx],
-          totalVisits: 0,
-          avgSeverity: 0,
-          avgDiagnoses: 0,
-          avgSymptoms: 0,
-        };
-      }
-
-      const student = students[idx];
-      clusterGroups[clusterIdx].students.push({
-        id: student.studentId,
-        name: student.name,
-        email: student.email,
-        visitCount: student.visits.length,
-      });
-
-      clusterGroups[clusterIdx].totalVisits += student.visits.length;
-      clusterGroups[clusterIdx].avgSeverity += features[idx][3];
-      clusterGroups[clusterIdx].avgDiagnoses += features[idx][1];
-      clusterGroups[clusterIdx].avgSymptoms += features[idx][2];
-    });
-
-    // Generate human-readable labels
-    const clustersWithLabels = Object.values(clusterGroups).map((cluster) => {
-      const count = cluster.students.length;
-      const avgVisits = cluster.totalVisits / count;
-      const avgSev = cluster.avgSeverity / count;
-      const avgDiag = cluster.avgDiagnoses / count;
-
-      let label = "";
-      let riskLevel = "";
-
-      // Categorize by visit frequency
-      if (avgVisits >= 5) {
-        label += "Frequent Visitors";
-        riskLevel = "High";
-      } else if (avgVisits >= 3) {
-        label += "Regular Visitors";
-        riskLevel = "Medium";
-      } else {
-        label += "Occasional Visitors";
-        riskLevel = "Low";
-      }
-
-      // Add severity indicator
-      if (avgSev >= 4) {
-        label += " with Serious Conditions";
-        riskLevel = "Critical";
-      } else if (avgSev >= 3) {
-        label += " with Moderate Conditions";
-      } else {
-        label += " with Mild Conditions";
-      }
-
-      return {
-        clusterId: cluster.id,
-        label,
-        riskLevel,
-        count,
-        percentage: ((count / students.length) * 100).toFixed(2),
-        avgVisits: avgVisits.toFixed(2),
-        avgSeverity: avgSev.toFixed(2),
-        avgDiagnosesPerStudent: avgDiag.toFixed(2),
-        sampleStudents: cluster.students.slice(0, 5),
-        centroid: cluster.centroid.map((v) => v.toFixed(3)),
-      };
-    });
-
-    // Sort by risk level
-    const riskOrder = { Critical: 0, High: 1, Medium: 2, Low: 3 };
-    clustersWithLabels.sort(
-      (a, b) => riskOrder[a.riskLevel] - riskOrder[b.riskLevel]
-    );
-
-    res.json({
-      success: true,
-      period: period, // ✅ Ginamit ang bagong period
-      totalStudents: students.length,
-      numberOfClusters: optimalK,
-      kSelectionMethod:
-        autoK === "true" ? "automatic (elbow+silhouette)" : "manual",
-      kSelectionDetails: kSelectionResult,
-      featureLabels: [
-        "Visit Frequency",
-        "Unique Diagnoses",
-        "Unique Symptoms",
-        "Average Severity",
-        "Days Since Last Visit",
-        "Gender",
-      ],
-      clusters: clustersWithLabels,
-      iterations: clusterResult.iterations,
-    });
-  } catch (error) {
-    console.error("❌ Enhanced clustering error:", error);
-    res.status(500).json({ message: error.message });
-  }
-}
-
-// Legacy clustering (keep for backward compatibility)
-export async function getClusteringAnalysis(req, res) {
-  // Redirect to enhanced version
-  return getEnhancedClusteringAnalysis(req, res);
-}
 
 // FIXED: Corrected date range calculation for accurate weekly monitoring
 export async function getHierarchicalAggregation(req, res) {
@@ -894,6 +470,27 @@ export async function getHierarchicalAggregation(req, res) {
         },
       ];
       dateFieldForGrouping = "$parsedDate";
+    } else if (recordType === "laboratoryRequest") {
+      basePipeline = [
+        {
+          $addFields: {
+            parsedDate: {
+              $dateFromString: {
+                dateString: { $substr: ["$issueDate", 0, 10] },
+                format: "%Y-%m-%d",
+                onError: "$createdAt",
+                onNull: "$createdAt",
+              },
+            },
+          },
+        },
+        {
+          $match: {
+            parsedDate: { $gte: startDate, $lte: endDate },
+          },
+        },
+      ];
+      dateFieldForGrouping = "$parsedDate";
     }
 
     // ✅ DEBUG: Show matched records with their actual dates
@@ -916,7 +513,7 @@ export async function getHierarchicalAggregation(req, res) {
       console.log(
         `  ${idx + 1}. ID: ${r._id}, Date: ${r.date || "N/A"}, Created: ${
           r.createdAt?.toISOString().split("T")[0]
-        }, Status: ${r.status}`
+        }, Status: ${r.status}`,
       );
     });
 
@@ -957,7 +554,7 @@ export async function getHierarchicalAggregation(req, res) {
       // 👈 Ginamit ang 'daysInMonth'
       const dateString = currentDate.toISOString().split("T")[0];
       const existingStat = dailyStatsRaw.find(
-        (stat) => stat._id === dateString
+        (stat) => stat._id === dateString,
       );
 
       dailyStats.push(
@@ -967,7 +564,7 @@ export async function getHierarchicalAggregation(req, res) {
           pending: 0,
           approved: 0,
           rejected: 0,
-        }
+        },
       );
 
       currentDate.setDate(currentDate.getDate() + 1); // Umabante papuntang next day
@@ -1154,9 +751,13 @@ export async function exportRecords(req, res) {
     });
     // --- End ng Multi-Sort Logic ---
 
-    const records = await Model.find()
-      .sort(sortOptions) // 👈 GINAMIT ANG MULTI-SORT
-      .populate("studentId", "username email")
+    // --- BAGO: Filter Logic ---
+    const filterQuery = buildFilterQuery(req.query);
+    // --- End ng Filter Logic ---
+
+    const records = await Model.find(filterQuery)
+      .sort(sortOptions)
+      .populate("studentId", "username email profilePictureUrl")
       .lean();
 
     if (records.length === 0) {
@@ -1193,7 +794,7 @@ export async function exportRecords(req, res) {
             hour: "2-digit",
             minute: "2-digit",
             hour12: true,
-          }
+          },
         );
       }
 
@@ -1209,8 +810,8 @@ export async function exportRecords(req, res) {
         "Content-Disposition",
         `attachment; filename=${recordType}_${sortBy.replace(
           /,/g,
-          "-"
-        )}_${Date.now()}.csv`
+          "-",
+        )}_${Date.now()}.csv`,
       );
       res.send(csv);
     } else if (format === "excel") {
@@ -1350,9 +951,8 @@ export async function exportRecords(req, res) {
                     });
 
                     const countRow = worksheet.getRow(currentRow);
-                    countRow.getCell(
-                      1
-                    ).value = `Total: ${grouped[dept][program][year].length} students`;
+                    countRow.getCell(1).value =
+                      `Total: ${grouped[dept][program][year].length} students`;
                     countRow.getCell(1).font = { bold: true, italic: true };
                     countRow.getCell(1).fill = {
                       type: "pattern",
@@ -1411,14 +1011,14 @@ export async function exportRecords(req, res) {
 
       res.setHeader(
         "Content-Type",
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       );
       res.setHeader(
         "Content-Disposition",
         `attachment; filename=${recordType}_${sortBy.replace(
           /,/g,
-          "-"
-        )}_${Date.now()}.xlsx`
+          "-",
+        )}_${Date.now()}.xlsx`,
       );
 
       await workbook.xlsx.write(res);
@@ -1426,6 +1026,31 @@ export async function exportRecords(req, res) {
     }
   } catch (error) {
     console.error("❌ Export error:", error);
+    res.status(500).json({ message: error.message });
+  }
+}
+
+// ==================== PENDING RECORD COUNTS ====================
+export async function getPendingRecordCounts(req, res) {
+  try {
+    const [pe, mon, cert, mi, lr] = await Promise.all([
+      PhysicalExam.countDocuments({ status: "pending" }),
+      MedicalMonitoring.countDocuments({ status: "pending" }),
+      MedicalCertificate.countDocuments({ status: "pending" }),
+      MedicineIssuance.countDocuments({ status: "pending" }),
+      LaboratoryRequest.countDocuments({ status: "pending" }),
+    ]);
+
+    res.json({
+      physicalExam: pe,
+      monitoring: mon,
+      certificate: cert,
+      medicineIssuance: mi,
+      laboratoryRequest: lr,
+      total: pe + mon + cert + mi + lr,
+    });
+  } catch (error) {
+    console.error("❌ Pending counts error:", error);
     res.status(500).json({ message: error.message });
   }
 }

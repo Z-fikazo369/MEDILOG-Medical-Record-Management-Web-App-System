@@ -8,9 +8,8 @@ import {
   bulkDeleteRecords,
   bulkUpdateStatus,
   getHierarchicalAggregation,
-  getClusteringAnalysis,
-  getEnhancedClusteringAnalysis,
   exportRecords,
+  getPendingRecordCounts,
 } from "../controllers/medicalRecordController.js";
 
 // I-import ang security middleware
@@ -34,16 +33,10 @@ router.get(
   "/records/aggregation",
   protect,
   isAdmin,
-  getHierarchicalAggregation
-);
-router.get("/records/clustering", protect, isAdmin, getClusteringAnalysis);
-router.get(
-  "/records/clustering/enhanced",
-  protect,
-  isAdmin,
-  getEnhancedClusteringAnalysis
+  getHierarchicalAggregation,
 );
 router.get("/records/export", protect, isAdmin, exportRecords);
+router.get("/records/pending-counts", protect, isAdmin, getPendingRecordCounts);
 
 // ❌ TINANGGAL NA RIN DITO 'YUNG ROUTE PARA SA TALLY EXPORT
 // router.get("/records/tally-export", exportTallyWithCSV);

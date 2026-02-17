@@ -1,7 +1,11 @@
 import bcrypt from "bcrypt";
 import User from "../models/User.js";
 import generateOTP from "../utils/generateOTP.js";
-import { sendOTPEmail, sendApprovalEmail } from "../utils/emailService.js";
+import {
+  sendOTPEmail,
+  sendApprovalEmail,
+  sendStaffApprovalEmail,
+} from "../utils/emailService.js";
 import axios from "axios";
 import generateToken from "../utils/generateToken.js";
 import AdminActivityLog from "../models/AdminActivityLog.js";
@@ -16,7 +20,7 @@ async function verifyCaptcha(token) {
 
   try {
     const response = await axios.post(
-      `https://www.google.com/recaptcha/api/siteverify?secret=${secretKey}&response=${token}`
+      `https://www.google.com/recaptcha/api/siteverify?secret=${secretKey}&response=${token}`,
     );
     return response.data;
   } catch (error) {
@@ -28,6 +32,9 @@ async function verifyCaptcha(token) {
 // 🧩 Signup - Create pending account
 export async function signup(req, res) {
   try {
+    console.log("📝 SIGNUP REQUEST BODY:", JSON.stringify(req.body));
+    console.log("📎 SIGNUP FILE:", req.file ? req.file.path : "NO FILE");
+
     const {
       username,
       email,
@@ -39,17 +46,54 @@ export async function signup(req, res) {
       program,
       yearLevel,
       password, // ✅ Only for admin signup
+      employeeId,
+      position,
     } = req.body;
 
     const idPictureUrl = req.file ? req.file.path : null;
 
     // Check duplicates
-    const existingUser = await User.findOne({
-      $or: [{ email }, { lrn }, { studentId }],
-    });
+    const orConditions = [{ email }];
+    if (lrn && lrn !== "N/A") orConditions.push({ lrn });
+    if (studentId && studentId !== "N/A") orConditions.push({ studentId });
+    if (employeeId) orConditions.push({ employeeId });
+
+    const existingUser = await User.findOne({ $or: orConditions });
     if (existingUser) {
       return res.status(400).json({
-        message: "User with this email, LRN, or Student ID already exists",
+        message:
+          "User with this email, LRN, Student ID, or Employee ID already exists",
+      });
+    }
+
+    if (role === "staff") {
+      if (!idPictureUrl) {
+        return res
+          .status(400)
+          .json({ message: "ID Picture is required for staff registration." });
+      }
+
+      const staffUser = new User({
+        username,
+        email,
+        password, // Staff sets their own password
+        role: "staff",
+        status: "pending",
+        defaultLoginMethod: "email",
+        employeeId,
+        position,
+        idPictureUrl,
+        isVerified: false,
+        firstLoginCompleted: false,
+      });
+
+      await staffUser.save();
+
+      return res.status(201).json({
+        message:
+          "Staff account created successfully. Please wait for admin approval.",
+        userId: staffUser._id,
+        status: "pending",
       });
     }
 
@@ -152,7 +196,11 @@ export async function login(req, res) {
         .json({ message: "Invalid credentials - User not found" });
     }
 
-    if (user.role === "student" && user.status === "pending") {
+    // Pending check for students and staff
+    if (
+      (user.role === "student" || user.role === "staff") &&
+      user.status === "pending"
+    ) {
       return res.status(403).json({
         message:
           "Your account is pending admin approval. Please wait for confirmation.",
@@ -185,32 +233,79 @@ export async function login(req, res) {
         .json({ message: "Invalid credentials - Incorrect password" });
     }
 
-    if (role && user.role !== role) {
+    // Role check - allow staff to log in via admin portal
+    if (
+      role &&
+      user.role !== role &&
+      !(role === "admin" && user.role === "staff")
+    ) {
       return res.status(403).json({ message: "Role mismatch" });
     }
 
-    // Student Login (Remember Me)
-    if (user.role === "student" && user.rememberMe) {
-      return res.json({
-        message: "Login successful",
-        user,
-        requiresOTP: false,
-        token: generateToken(user._id),
-      });
+    // Student or Staff Login (Remember Me / Trust this device)
+    // Check kung expired na ang rememberMe (3 days no login = need OTP ulit)
+    if ((user.role === "student" || user.role === "staff") && user.rememberMe) {
+      const now = new Date();
+      if (user.rememberMeExpiry && user.rememberMeExpiry < now) {
+        // Expired na — reset rememberMe, require OTP ulit
+        user.rememberMe = false;
+        user.rememberMeExpiry = undefined;
+        await user.save();
+        console.log(`🔒 Trust device expired for ${user.email}, requiring OTP`);
+      } else {
+        // Still valid — update lastLoginAt and extend expiry by 3 more days
+        user.lastLoginAt = now;
+        user.rememberMeExpiry = new Date(
+          now.getTime() + 3 * 24 * 60 * 60 * 1000,
+        );
+        await user.save();
+
+        // Staff logging via admin portal — log activity too
+        if (user.role === "staff") {
+          const ipAddress =
+            req.headers["x-forwarded-for"]?.split(",")[0] ||
+            req.socket.remoteAddress ||
+            "unknown";
+          const userAgent = req.headers["user-agent"] || "";
+
+          try {
+            await AdminActivityLog.create({
+              adminId: user._id,
+              adminEmail: user.email,
+              adminUsername: user.username,
+              action: "LOGIN",
+              ipAddress,
+              userAgent,
+              status: "success",
+            });
+          } catch (logError) {
+            console.error("❌ Failed to log staff login:", logError);
+          }
+        }
+
+        return res.json({
+          message: "Login successful",
+          user,
+          requiresOTP: false,
+          token: generateToken(user._id),
+        });
+      }
     }
 
-    // Student Login (Requires OTP)
-    if (user.role === "student") {
+    // Student or Staff Login (Requires OTP)
+    if (user.role === "student" || user.role === "staff") {
       const otp = generateOTP();
       user.otp = otp;
       user.otpExpiry = Date.now() + 5 * 60 * 1000;
       await user.save();
 
+      console.log(`\n📧 OTP for ${user.email}: ${otp}\n`);
+
       try {
         await sendOTPEmail(user.email, "MEDILOG - Login Verification OTP", otp);
+        console.log(`✅ OTP email sent to: ${user.email}`);
       } catch (emailError) {
-        console.error(`❌ Failed to send email:`, emailError.message);
-        console.log(`\n📧 BACKUP - OTP for ${user.email}: ${otp}\n`);
+        console.error(`❌ Failed to send OTP email:`, emailError.message);
       }
 
       return res.json({
@@ -241,6 +336,10 @@ export async function login(req, res) {
       } catch (logError) {
         console.error("❌ Failed to log admin login:", logError);
       }
+
+      // Update lastLoginAt for admin
+      user.lastLoginAt = new Date();
+      await user.save();
     }
 
     res.json({
@@ -270,6 +369,13 @@ export async function verifyOTP(req, res) {
     user.isVerified = true;
     user.firstLoginCompleted = true;
     user.rememberMe = rememberMe || false;
+    user.lastLoginAt = new Date();
+    if (rememberMe) {
+      // Set expiry to 3 days from now
+      user.rememberMeExpiry = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
+    } else {
+      user.rememberMeExpiry = undefined;
+    }
     user.otp = undefined;
     user.otpExpiry = undefined;
     await user.save();
@@ -349,8 +455,12 @@ export async function approveAccount(req, res) {
       return res.status(400).json({ message: "Account is not pending" });
     }
 
-    // ✅ Set password to LRN (plain text - User.js will hash it)
-    user.password = user.lrn;
+    // ✅ Set password: LRN for students, staff already has their own password
+    if (user.role === "staff") {
+      // Staff already set their password during signup — don't overwrite
+    } else {
+      user.password = user.lrn;
+    }
 
     user.status = "approved";
     user.approvedBy = adminId;
@@ -358,19 +468,28 @@ export async function approveAccount(req, res) {
 
     await user.save(); // User.js pre-save hook will hash the password
 
+    let emailSent = true;
     try {
-      await sendApprovalEmail(
-        user.email,
-        user.username,
-        user.defaultLoginMethod,
-        user.lrn
-      );
+      if (user.role === "staff") {
+        await sendStaffApprovalEmail(user.email, user.username, user.position);
+      } else {
+        await sendApprovalEmail(
+          user.email,
+          user.username,
+          user.defaultLoginMethod,
+          user.lrn,
+        );
+      }
     } catch (emailError) {
+      emailSent = false;
       console.error(`❌ Failed to send approval email:`, emailError.message);
     }
 
     res.json({
-      message: `Account approved successfully. Email notification sent to ${user.username}.`,
+      message: emailSent
+        ? `Account approved successfully. Email notification sent to ${user.username}.`
+        : `Account approved successfully, but the email notification to ${user.username} failed to send. Please inform the student manually.`,
+      emailSent,
       user: {
         _id: user._id,
         username: user.username,
@@ -633,6 +752,306 @@ export async function getTotalStudentCount(req, res) {
     });
   } catch (error) {
     console.error("❌ Error fetching total student count:", error);
+    res.status(500).json({ message: error.message });
+  }
+}
+
+// ✅ Delete Student Account
+export async function deleteStudentAccount(req, res) {
+  try {
+    const { userId } = req.params;
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    if (user.role !== "student") {
+      return res
+        .status(400)
+        .json({ message: "Can only delete student accounts" });
+    }
+
+    const deletedUsername = user.username;
+    const deletedEmail = user.email;
+
+    await User.findByIdAndDelete(userId);
+
+    res.json({
+      message: `Account for ${deletedUsername} has been permanently deleted.`,
+    });
+
+    // Log the activity
+    const ipAddress =
+      req.headers["x-forwarded-for"]?.split(",")[0] ||
+      req.socket.remoteAddress ||
+      "unknown";
+    const userAgent = req.headers["user-agent"] || "";
+
+    try {
+      await AdminActivityLog.create({
+        adminId: req.user?._id,
+        adminEmail: req.user?.email || "admin",
+        adminUsername: req.user?.username || "admin",
+        action: "DELETE_ACCOUNT",
+        actionDetails: {
+          userId: userId,
+          userName: deletedUsername,
+          details: `Permanently deleted account for ${deletedEmail}`,
+        },
+        ipAddress,
+        userAgent,
+      });
+    } catch (logErr) {
+      console.error("Failed to log delete activity:", logErr);
+    }
+  } catch (error) {
+    console.error("❌ Error deleting student account:", error);
+    res.status(500).json({ message: error.message });
+  }
+}
+
+// ✅ Update Student Account
+export async function updateStudentAccount(req, res) {
+  try {
+    const { userId } = req.params;
+    const { username, email, lrn, studentId, status } = req.body;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    if (user.role !== "student") {
+      return res
+        .status(400)
+        .json({ message: "Can only update student accounts" });
+    }
+
+    // Update fields if provided
+    if (username) user.username = username;
+    if (email) user.email = email;
+    if (lrn) user.lrn = lrn;
+    if (studentId) user.studentId = studentId;
+    if (status) user.status = status;
+
+    await user.save();
+
+    res.json({
+      message: `Account for ${user.username} has been updated.`,
+      user: {
+        _id: user._id,
+        username: user.username,
+        email: user.email,
+        lrn: user.lrn,
+        studentId: user.studentId,
+        status: user.status,
+      },
+    });
+
+    // Log the activity
+    const ipAddress =
+      req.headers["x-forwarded-for"]?.split(",")[0] ||
+      req.socket.remoteAddress ||
+      "unknown";
+    const userAgent = req.headers["user-agent"] || "";
+
+    try {
+      await AdminActivityLog.create({
+        adminId: req.user?._id,
+        adminEmail: req.user?.email || "admin",
+        adminUsername: req.user?.username || "admin",
+        action: "UPDATE_ACCOUNT",
+        actionDetails: {
+          userId: user._id.toString(),
+          userName: user.username,
+          details: `Updated account details for ${user.email}`,
+        },
+        ipAddress,
+        userAgent,
+      });
+    } catch (logErr) {
+      console.error("Failed to log update activity:", logErr);
+    }
+  } catch (error) {
+    console.error("❌ Error updating student account:", error);
+    res.status(500).json({ message: error.message });
+  }
+}
+
+// ========== STAFF ACCOUNT ENDPOINTS ==========
+
+// 📖 Get ALL Staff Accounts (Paginated)
+export async function getAllStaffAccounts(req, res) {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    const query = { role: "staff" };
+
+    const accounts = await User.find(query)
+      .select("-password -otp -otpExpiry")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    const totalCount = await User.countDocuments(query);
+
+    res.json({
+      message: "Staff accounts retrieved successfully",
+      accounts,
+      currentPage: page,
+      totalPages: Math.ceil(totalCount / limit),
+      totalCount,
+    });
+  } catch (error) {
+    console.error("❌ Error fetching staff accounts:", error);
+    res.status(500).json({ message: error.message });
+  }
+}
+
+// 📋 Get Pending Staff Accounts
+export async function getPendingStaffAccounts(req, res) {
+  try {
+    const pendingStaff = await User.find({
+      role: "staff",
+      status: "pending",
+    })
+      .select("-password -otp -otpExpiry")
+      .sort({ createdAt: -1 });
+
+    res.json({
+      message: "Pending staff accounts retrieved successfully",
+      accounts: pendingStaff,
+      count: pendingStaff.length,
+    });
+  } catch (error) {
+    console.error("❌ Error fetching pending staff accounts:", error);
+    res.status(500).json({ message: error.message });
+  }
+}
+
+// 📊 Get Total Staff Count
+export async function getTotalStaffCount(req, res) {
+  try {
+    const totalCount = await User.countDocuments({ role: "staff" });
+    res.json({
+      message: "Total staff count retrieved successfully",
+      totalCount,
+    });
+  } catch (error) {
+    console.error("❌ Error fetching total staff count:", error);
+    res.status(500).json({ message: error.message });
+  }
+}
+
+// ✅ Delete Staff Account
+export async function deleteStaffAccount(req, res) {
+  try {
+    const { userId } = req.params;
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: "User not found" });
+    if (user.role !== "staff") {
+      return res
+        .status(400)
+        .json({ message: "Can only delete staff accounts via this endpoint" });
+    }
+
+    const deletedUsername = user.username;
+    const deletedEmail = user.email;
+
+    await User.findByIdAndDelete(userId);
+
+    res.json({
+      message: `Staff account for ${deletedUsername} has been permanently deleted.`,
+    });
+
+    const ipAddress =
+      req.headers["x-forwarded-for"]?.split(",")[0] ||
+      req.socket.remoteAddress ||
+      "unknown";
+    const userAgent = req.headers["user-agent"] || "";
+
+    try {
+      await AdminActivityLog.create({
+        adminId: req.user?._id,
+        adminEmail: req.user?.email || "admin",
+        adminUsername: req.user?.username || "admin",
+        action: "DELETE_STAFF_ACCOUNT",
+        actionDetails: {
+          userId,
+          userName: deletedUsername,
+          details: `Permanently deleted staff account for ${deletedEmail}`,
+        },
+        ipAddress,
+        userAgent,
+      });
+    } catch (logErr) {
+      console.error("Failed to log delete activity:", logErr);
+    }
+  } catch (error) {
+    console.error("❌ Error deleting staff account:", error);
+    res.status(500).json({ message: error.message });
+  }
+}
+
+// ✅ Update Staff Account
+export async function updateStaffAccount(req, res) {
+  try {
+    const { userId } = req.params;
+    const { username, email, employeeId, position, status } = req.body;
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: "User not found" });
+    if (user.role !== "staff") {
+      return res
+        .status(400)
+        .json({ message: "Can only update staff accounts via this endpoint" });
+    }
+
+    if (username) user.username = username;
+    if (email) user.email = email;
+    if (employeeId) user.employeeId = employeeId;
+    if (position) user.position = position;
+    if (status) user.status = status;
+
+    await user.save();
+
+    res.json({
+      message: `Staff account for ${user.username} has been updated.`,
+      user: {
+        _id: user._id,
+        username: user.username,
+        email: user.email,
+        employeeId: user.employeeId,
+        position: user.position,
+        status: user.status,
+      },
+    });
+
+    const ipAddress =
+      req.headers["x-forwarded-for"]?.split(",")[0] ||
+      req.socket.remoteAddress ||
+      "unknown";
+    const userAgent = req.headers["user-agent"] || "";
+
+    try {
+      await AdminActivityLog.create({
+        adminId: req.user?._id,
+        adminEmail: req.user?.email || "admin",
+        adminUsername: req.user?.username || "admin",
+        action: "UPDATE_STAFF_ACCOUNT",
+        actionDetails: {
+          userId: user._id.toString(),
+          userName: user.username,
+          details: `Updated staff account details for ${user.email}`,
+        },
+        ipAddress,
+        userAgent,
+      });
+    } catch (logErr) {
+      console.error("Failed to log update activity:", logErr);
+    }
+  } catch (error) {
+    console.error("❌ Error updating staff account:", error);
     res.status(500).json({ message: error.message });
   }
 }

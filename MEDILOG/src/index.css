@@ -1,4 +1,4 @@
-/* --- CSS VARIABLES (Light/Dark Mode Support) --- */
+/* --- CSS VARIABLES --- */
 :root {
   --bg-body: #f4f6f8;
   --bg-card: #ffffff;
@@ -12,25 +12,7 @@
   --primary-hover: #145c32;
   --hero-gradient: linear-gradient(to right, #ffffff 50%, #e6f4ea 100%);
   --shadow-color: rgba(0, 0, 0, 0.1);
-  --toggle-bg: #e9ecef;
   --border-color: #e9ecef;
-}
-
-[data-theme="dark"] {
-  --bg-body: #0a0c0b;
-  --bg-card: #141615;
-  --bg-nav: rgba(10, 12, 11, 0.95);
-  --text-primary: #ffffff;
-  --text-secondary: #a0a0a0;
-  --text-highlight: #4ade80;
-  --input-bg: #1c1f1e;
-  --input-border: #333333;
-  --primary-color: #2ecc71;
-  --primary-hover: #27ae60;
-  --hero-gradient: linear-gradient(to right, #0a0c0b 50%, #0f291e 100%);
-  --shadow-color: rgba(0, 0, 0, 0.5);
-  --toggle-bg: #333;
-  --border-color: #333333;
 }
 
 /* --- GLOBAL RESET --- */
@@ -47,37 +29,15 @@ body {
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
-    "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
-    sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu",
+    "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background-color: var(--bg-body);
   color: var(--text-primary);
   min-height: 100vh;
   overflow-x: hidden;
-  transition: background-color 0.3s ease, color 0.3s ease;
-}
-
-/* --- THEME TOGGLE BUTTON --- */
-.theme-toggle-btn {
-  background: var(--toggle-bg);
-  border: 1px solid var(--border-color);
-  color: var(--text-primary);
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  font-size: 1.2rem;
-}
-
-.theme-toggle-btn:hover {
-  transform: scale(1.1);
-  box-shadow: 0 0 10px var(--primary-color);
 }
 
 /* --- AUTH LAYOUT STYLES --- */
@@ -235,7 +195,9 @@ body {
   margin: 5px 0;
   padding: 10px 15px;
   border-radius: 8px;
-  transition: background 0.3s, color 0.3s;
+  transition:
+    background 0.3s,
+    color 0.3s;
 }
 
 .sidebar .nav-link:hover {

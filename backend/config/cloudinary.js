@@ -21,6 +21,18 @@ const storage = new CloudinaryStorage({
   },
 });
 
+// Storage para sa ID pictures — WALANG crop, full raw dimensions
+const idStorage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: "medilog_id_pictures",
+    allowed_formats: ["jpg", "png", "jpeg"],
+    // No transformation — keep original dimensions
+  },
+});
+
 const upload = multer({ storage: storage });
+const uploadIdPicture = multer({ storage: idStorage });
 
 export default upload;
+export { uploadIdPicture };

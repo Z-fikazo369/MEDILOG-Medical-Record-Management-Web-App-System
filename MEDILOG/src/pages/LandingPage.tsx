@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import ThemeToggle from "../components/ThemeToggle";
 import "../styles/LandingPage.css";
 
 const LandingPage: React.FC = () => {
@@ -67,7 +66,6 @@ const LandingPage: React.FC = () => {
         </div>
 
         <div className="nav-actions d-flex align-items-center gap-3">
-          <ThemeToggle />
           <button
             className="btn-login-nav"
             onClick={() => navigate("/login/student")}

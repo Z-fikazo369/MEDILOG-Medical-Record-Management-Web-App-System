@@ -11,7 +11,7 @@ const api = axios.create({
 // ✅ Interceptor para sa Token
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem("authToken");
+    const token = sessionStorage.getItem("authToken");
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -26,7 +26,7 @@ api.interceptors.request.use(
   },
   (error) => {
     return Promise.reject(error);
-  }
+  },
 );
 
 // ✅ Interceptor para sa 401 (Expired Token)
@@ -36,13 +36,16 @@ api.interceptors.response.use(
   },
   (error) => {
     if (error.response && error.response.status === 401) {
-      console.error("Unauthorized! Logging out...");
-      localStorage.removeItem("authToken");
-      localStorage.removeItem("authUser");
-      window.location.href = "/";
+      // ✅ CHECK MUNA: Baka nasa login page na, wag na mag-redirect loop
+      if (window.location.pathname !== "/") {
+        console.error("Unauthorized! Logging out...");
+        sessionStorage.removeItem("authToken");
+        sessionStorage.removeItem("authUser");
+        window.location.href = "/";
+      }
     }
     return Promise.reject(error);
-  }
+  },
 );
 
 // --- Interfaces ---
@@ -53,7 +56,9 @@ export interface User {
   email: string;
   lrn: string;
   studentId: string;
-  role: "student" | "admin";
+  role: "student" | "admin" | "staff";
+  position?: string;
+  employeeId?: string;
   status: "pending" | "approved" | "rejected";
   defaultLoginMethod?: "email" | "studentId";
   isVerified: boolean;
@@ -66,6 +71,7 @@ export interface User {
 }
 
 export interface AuthResponse {
+  role: any;
   message: string;
   user: User;
   token: string;
@@ -211,6 +217,60 @@ export const authAPI = {
     return response.data;
   },
 
+  deleteStudentAccount: async (userId: string) => {
+    const response = await api.delete(`/accounts/${userId}`);
+    return response.data;
+  },
+
+  updateStudentAccount: async (
+    userId: string,
+    data: {
+      username?: string;
+      email?: string;
+      lrn?: string;
+      studentId?: string;
+      status?: string;
+    },
+  ) => {
+    const response = await api.put(`/accounts/${userId}`, data);
+    return response.data;
+  },
+
+  // --- Staff Account Management ---
+  getAllStaffAccounts: async (page: number = 1, limit: number = 10) => {
+    const response = await api.get(`/staff/all?page=${page}&limit=${limit}`);
+    return response.data;
+  },
+
+  getPendingStaffAccounts: async () => {
+    const response = await api.get("/staff/pending");
+    return response.data;
+  },
+
+  getTotalStaffCount: async (): Promise<{ totalCount: number }> => {
+    const response = await api.get("/staff/total");
+    return response.data;
+  },
+
+  deleteStaffAccount: async (userId: string) => {
+    const response = await api.delete(`/staff/${userId}`);
+    return response.data;
+  },
+
+  updateStaffAccount: async (
+    userId: string,
+    data: {
+      username?: string;
+      email?: string;
+      employeeId?: string;
+      position?: string;
+      status?: string;
+    },
+  ) => {
+    const response = await api.put(`/staff/${userId}`, data);
+    return response.data;
+  },
+
   createSystemBackup: async () => {
     const response = await api.post("/users/backup/create");
     return response.data;
@@ -261,14 +321,21 @@ export const medicalAPI = {
     type?: string,
     page: number = 1,
     sortConfig: SortConfig[] = [{ key: "createdAt", order: "desc" }],
-    limit: number = 10
+    limit: number = 10,
+    filters: Record<string, string> = {},
   ): Promise<PaginatedRecordsResponse> => {
     const sortBy = sortConfig.map((s) => s.key).join(",");
     const sortOrder = sortConfig.map((s) => s.order).join(",");
 
-    const url = type
+    const filterParams = Object.entries(filters)
+      .filter(([, v]) => v)
+      .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
+      .join("&");
+
+    let url = type
       ? `/records/all?type=${type}&page=${page}&sortBy=${sortBy}&sortOrder=${sortOrder}&limit=${limit}`
       : `/records/all?page=${page}&sortBy=${sortBy}&sortOrder=${sortOrder}&limit=${limit}`;
+    if (filterParams) url += `&${filterParams}`;
 
     const response = await api.get(url);
     return response.data;
@@ -281,7 +348,7 @@ export const medicalAPI = {
 
   deleteRecord: async (id: string, recordType: string) => {
     const response = await api.delete(
-      `/records/${id}?recordType=${recordType}`
+      `/records/${id}?recordType=${recordType}`,
     );
     return response.data;
   },
@@ -298,7 +365,7 @@ export const medicalAPI = {
     ids: string[],
     recordType: string,
     status: "approved" | "rejected",
-    adminId: string
+    adminId: string,
   ) => {
     const response = await api.post("/records/bulk-update-status", {
       ids,
@@ -311,29 +378,7 @@ export const medicalAPI = {
 
   getAggregation: async (recordType: string) => {
     const response = await api.get(
-      `/records/aggregation?recordType=${recordType}`
-    );
-    return response.data;
-  },
-
-  getClusteringAnalysis: async (
-    recordType: string,
-    days: number = 7,
-    k: number = 3
-  ) => {
-    const response = await api.get(
-      `/records/clustering?recordType=${recordType}&days=${days}&k=${k}`
-    );
-    return response.data;
-  },
-
-  getEnhancedClusteringAnalysis: async (
-    days: number = 30,
-    autoK: boolean = true,
-    k: number = 3
-  ) => {
-    const response = await api.get(
-      `/records/clustering/enhanced?days=${days}&autoK=${autoK}&k=${k}`
+      `/records/aggregation?recordType=${recordType}`,
     );
     return response.data;
   },
@@ -341,18 +386,29 @@ export const medicalAPI = {
   exportRecords: async (
     recordType: string,
     format: "csv" | "excel" = "csv",
-    sortConfig: SortConfig[]
+    sortConfig: SortConfig[],
+    filters: Record<string, string> = {},
   ) => {
     const sortBy = sortConfig.map((s) => s.key).join(",");
     const sortOrder = sortConfig.map((s) => s.order).join(",");
 
-    const response = await api.get(
-      `/records/export?recordType=${recordType}&format=${format}&sortBy=${sortBy}&sortOrder=${sortOrder}`,
-      {
-        responseType: "blob",
-      }
-    );
+    const filterParams = Object.entries(filters)
+      .filter(([, v]) => v)
+      .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
+      .join("&");
+
+    let url = `/records/export?recordType=${recordType}&format=${format}&sortBy=${sortBy}&sortOrder=${sortOrder}`;
+    if (filterParams) url += `&${filterParams}`;
+
+    const response = await api.get(url, {
+      responseType: "blob",
+    });
     return response;
+  },
+
+  getPendingRecordCounts: async () => {
+    const response = await api.get("/records/pending-counts");
+    return response.data;
   },
 
   getStudentNotifications: async (studentId: string) => {
@@ -362,15 +418,20 @@ export const medicalAPI = {
 
   getUnreadCount: async (studentId: string) => {
     const response = await api.get(
-      `/notifications/student/${studentId}/unread-count`
+      `/notifications/student/${studentId}/unread-count`,
     );
     return response.data;
   },
 
   markNotificationsAsRead: async (studentId: string) => {
     const response = await api.post(
-      `/notifications/student/${studentId}/mark-read`
+      `/notifications/student/${studentId}/mark-read`,
     );
+    return response.data;
+  },
+
+  getMedicineList: async () => {
+    const response = await api.get("/pharmacy/medicine-list");
     return response.data;
   },
 };
@@ -380,37 +441,87 @@ export const analyticsAPI = {
     const response = await api.get("/analytics/insights");
     return response.data;
   },
-};
 
-export const adminActivityAPI = {
-  logActivity: async (action: string, actionDetails: any = {}) => {
-    const response = await api.post("/activity-logs", {
-      action,
-      actionDetails,
-    });
+  getDashboardOverview: async () => {
+    const response = await api.get("/analytics/dashboard-overview");
     return response.data;
   },
 
-  getActivityLogs: async (
+  getPredictiveAnalytics: async () => {
+    const response = await api.get("/analytics/predictive", {
+      timeout: 120000, // 2 minutes — CatBoost ML training can be slow on first load
+    });
+    return response.data;
+  },
+};
+
+// ✅ AI Assistant API
+export const aiAssistantAPI = {
+  getStats: async () => {
+    const response = await api.get("/ai-assistant/stats");
+    return response.data;
+  },
+
+  getTranscriptions: async (
     page: number = 1,
     limit: number = 20,
-    adminId?: string,
-    action?: string,
-    startDate?: string,
-    endDate?: string
+    type?: string,
   ) => {
-    let url = `/activity-logs?page=${page}&limit=${limit}`;
-    if (adminId) url += `&adminId=${adminId}`;
-    if (action) url += `&action=${action}`;
-    if (startDate) url += `&startDate=${startDate}`;
-    if (endDate) url += `&endDate=${endDate}`;
-
+    let url = `/ai-assistant/transcriptions?page=${page}&limit=${limit}`;
+    if (type) url += `&type=${type}`;
     const response = await api.get(url);
     return response.data;
   },
 
-  getActivitySummary: async (days: number = 7) => {
-    const response = await api.get(`/activity-logs/summary?days=${days}`);
+  saveTranscription: async (data: {
+    type: "audio" | "image";
+    title?: string;
+    transcriptionText?: string;
+    extractedText?: string;
+    audioDuration?: number;
+    originalFileName?: string;
+    wordCount?: number;
+    patientName?: string;
+  }) => {
+    const response = await api.post("/ai-assistant/transcriptions", data);
+    return response.data;
+  },
+
+  // NEW: Upload audio file for Groq Whisper transcription + Llama summary
+  uploadAudioConsultation: async (formData: FormData) => {
+    const response = await api.post(
+      "/ai-assistant/transcriptions/audio",
+      formData,
+      { timeout: 120000 }, // 2 min — Whisper can be slow on long audio
+    );
+    return response.data;
+  },
+
+  uploadImageOCR: async (formData: FormData) => {
+    const response = await api.post(
+      "/ai-assistant/transcriptions/ocr",
+      formData,
+    );
+    return response.data;
+  },
+
+  uploadPDF: async (formData: FormData) => {
+    const response = await api.post(
+      "/ai-assistant/transcriptions/pdf",
+      formData,
+    );
+    return response.data;
+  },
+
+  regenerateSummary: async (id: string) => {
+    const response = await api.post(
+      `/ai-assistant/transcriptions/${id}/regenerate-summary`,
+    );
+    return response.data;
+  },
+
+  deleteTranscription: async (id: string) => {
+    const response = await api.delete(`/ai-assistant/transcriptions/${id}`);
     return response.data;
   },
 };

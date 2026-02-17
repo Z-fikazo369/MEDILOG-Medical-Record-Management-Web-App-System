@@ -5,7 +5,7 @@ import { useAuth } from "../context/AuthContext";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
-  requiredRole?: "student" | "admin";
+  requiredRole?: "student" | "admin" | "staff";
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
@@ -34,11 +34,15 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     return <Navigate to="/" state={{ from: location }} replace />;
   }
 
-  // 3. CHECK ROLE: Kung mali ang role, redirect sa tamang dashboard
+  // 3. CHECK ROLE: Staff can access admin dashboard too
   if (requiredRole && user?.role !== requiredRole) {
+    // Allow staff to access admin dashboard
+    if (requiredRole === "admin" && user?.role === "staff") {
+      return <>{children}</>;
+    }
     if (user?.role === "student") {
       return <Navigate to="/student/dashboard" replace />;
-    } else if (user?.role === "admin") {
+    } else if (user?.role === "admin" || user?.role === "staff") {
       return <Navigate to="/admin/dashboard" replace />;
     }
     return <Navigate to="/" replace />;

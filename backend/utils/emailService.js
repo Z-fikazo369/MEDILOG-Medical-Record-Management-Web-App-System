@@ -129,3 +129,91 @@ export async function sendApprovalEmail(to, username, loginMethod, lrn) {
     throw error;
   }
 }
+
+// Staff Approval Email Template
+export async function sendStaffApprovalEmail(to, username, position) {
+  try {
+    const transporter = createTransporter();
+
+    const mailOptions = {
+      from: `"MEDILOG" <${process.env.EMAIL_USER}>`,
+      to,
+      subject: "MEDILOG - Staff Account Approved! 🎉",
+      html: `
+        <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto;">
+          <div style="background: linear-gradient(135deg, #2c5f2d 0%, #4a9d4f 100%); padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
+            <h1 style="color: white; margin: 0; font-size: 28px;">🎉 Welcome to MEDILOG!</h1>
+          </div>
+          
+          <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
+            <h2 style="color: #2c5f2d; margin-top: 0;">Hi ${username},</h2>
+            
+            <p style="font-size: 16px; line-height: 1.6; color: #333;">
+              Great news! Your MEDILOG staff account has been <strong>approved by an administrator</strong>. 
+              You can now access the <strong>Admin Portal</strong>.
+            </p>
+            
+            <div style="background: white; border-left: 4px solid #8b5cf6; padding: 20px; margin: 25px 0; border-radius: 5px;">
+              <h3 style="color: #8b5cf6; margin-top: 0;">📋 Your Login Details</h3>
+              <table style="width: 100%; border-collapse: collapse;">
+                <tr>
+                  <td style="padding: 8px 0; color: #666; font-weight: bold;">Position:</td>
+                  <td style="padding: 8px 0; color: #8b5cf6; font-weight: bold;">${position}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 0; color: #666; font-weight: bold;">Login with:</td>
+                  <td style="padding: 8px 0; color: #8b5cf6; font-weight: bold;">Your Email Address</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 0; color: #666; font-weight: bold;">Password:</td>
+                  <td style="padding: 8px 0; color: #8b5cf6; font-weight: bold;">The password you set during registration</td>
+                </tr>
+              </table>
+            </div>
+            
+            <div style="background: #fff3cd; border: 1px solid #ffc107; padding: 15px; border-radius: 5px; margin: 20px 0;">
+              <p style="margin: 0; color: #856404;">
+                <strong>⚠️ Important:</strong> For security, you'll receive an OTP (One-Time Password) 
+                via email each time you log in. Check the OTP sent to this email to complete login.
+              </p>
+            </div>
+            
+            <h3 style="color: #2c5f2d;">🚀 Next Steps:</h3>
+            <ol style="line-height: 2; color: #333;">
+              <li>Go to the MEDILOG login page</li>
+              <li>Select <strong>Staff/Admin Login</strong></li>
+              <li>Enter your <strong>email address</strong></li>
+              <li>Use the <strong>password you created</strong> during signup</li>
+              <li>Verify the OTP sent to this email</li>
+              <li>Access the Admin Portal!</li>
+            </ol>
+            
+            <div style="text-align: center; margin-top: 30px;">
+              <a href="${
+                process.env.FRONTEND_URL || "http://localhost:5173"
+              }/login/admin" 
+                 style="background: #8b5cf6; color: white; padding: 15px 40px; text-decoration: none; 
+                        border-radius: 5px; font-weight: bold; display: inline-block;">
+                Login Now
+              </a>
+            </div>
+            
+            <p style="color: #666; font-size: 14px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
+              If you have any questions or need assistance, please contact your administrator.
+            </p>
+          </div>
+          
+          <div style="text-align: center; padding: 20px; color: #999; font-size: 12px;">
+            <p>© 2024 MEDILOG. All rights reserved.</p>
+          </div>
+        </div>
+      `,
+    };
+
+    await transporter.sendMail(mailOptions);
+    console.log(`✅ Staff approval email sent to: ${to}`);
+  } catch (error) {
+    console.error("Staff approval email sending failed:", error.message);
+    throw error;
+  }
+}

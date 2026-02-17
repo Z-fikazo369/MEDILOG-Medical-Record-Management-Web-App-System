@@ -23,11 +23,13 @@ const SignupForm: React.FC = () => {
     yearLevel: "",
     employeeId: "",
     position: "",
+    password: "",
+    confirmPassword: "",
     preferredLoginMethod: "email" as "email" | "studentId",
   });
 
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
   ) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
@@ -68,13 +70,36 @@ const SignupForm: React.FC = () => {
         if (!formData.employeeId)
           throw new Error("Employee ID / License No. is required.");
 
+        // Password validation for staff
+        const pw = formData.password;
+        if (!pw) throw new Error("Password is required.");
+        if (pw.length < 8)
+          throw new Error("Password must be at least 8 characters.");
+        if (!/[A-Z]/.test(pw))
+          throw new Error(
+            "Password must contain at least one uppercase letter.",
+          );
+        if (!/[a-z]/.test(pw))
+          throw new Error(
+            "Password must contain at least one lowercase letter.",
+          );
+        if (!/[0-9]/.test(pw))
+          throw new Error("Password must contain at least one number.");
+        if (!/[!@#$%^&*()_+\-={}|;':",./<>?]/.test(pw))
+          throw new Error(
+            "Password must contain at least one special character.",
+          );
+        if (pw !== formData.confirmPassword)
+          throw new Error("Passwords do not match.");
+
         data.append("employeeId", formData.employeeId);
         data.append("position", formData.position);
+        data.append("password", formData.password);
       }
 
       await authAPI.signup(data);
       alert(
-        `Account created successfully! Please wait for Admin Verification.`
+        `Account created successfully! Please wait for Admin Verification.`,
       );
       navigate("/");
     } catch (err: any) {
@@ -376,6 +401,124 @@ const SignupForm: React.FC = () => {
                   </select>
                 </div>
               </div>
+
+              {/* Password Fields */}
+              <div className="form-row">
+                <div className="form-group half">
+                  <label>Password</label>
+                  <input
+                    type="password"
+                    name="password"
+                    className="form-input"
+                    placeholder="Create a strong password"
+                    value={formData.password}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
+                <div className="form-group half">
+                  <label>Confirm Password</label>
+                  <input
+                    type="password"
+                    name="confirmPassword"
+                    className="form-input"
+                    placeholder="Re-enter password"
+                    value={formData.confirmPassword}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Password Strength Checker */}
+              {formData.password && (
+                <div style={{ fontSize: "0.8rem", padding: "0.5rem 0" }}>
+                  <p
+                    style={{
+                      margin: "0 0 0.3rem",
+                      fontWeight: 600,
+                      color: "#374151",
+                    }}
+                  >
+                    Password Requirements:
+                  </p>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "2px",
+                    }}
+                  >
+                    <span
+                      style={{
+                        color:
+                          formData.password.length >= 8 ? "#16a34a" : "#dc2626",
+                      }}
+                    >
+                      {formData.password.length >= 8 ? "✓" : "✗"} At least 8
+                      characters
+                    </span>
+                    <span
+                      style={{
+                        color: /[A-Z]/.test(formData.password)
+                          ? "#16a34a"
+                          : "#dc2626",
+                      }}
+                    >
+                      {/[A-Z]/.test(formData.password) ? "✓" : "✗"} One
+                      uppercase letter
+                    </span>
+                    <span
+                      style={{
+                        color: /[a-z]/.test(formData.password)
+                          ? "#16a34a"
+                          : "#dc2626",
+                      }}
+                    >
+                      {/[a-z]/.test(formData.password) ? "✓" : "✗"} One
+                      lowercase letter
+                    </span>
+                    <span
+                      style={{
+                        color: /[0-9]/.test(formData.password)
+                          ? "#16a34a"
+                          : "#dc2626",
+                      }}
+                    >
+                      {/[0-9]/.test(formData.password) ? "✓" : "✗"} One number
+                    </span>
+                    <span
+                      style={{
+                        color: /[!@#$%^&*()_+\-={}|;':",./<>?]/.test(
+                          formData.password,
+                        )
+                          ? "#16a34a"
+                          : "#dc2626",
+                      }}
+                    >
+                      {/[!@#$%^&*()_+\-={}|;':",./<>?]/.test(formData.password)
+                        ? "✓"
+                        : "✗"}{" "}
+                      One special character (!@#$...)
+                    </span>
+                    {formData.confirmPassword && (
+                      <span
+                        style={{
+                          color:
+                            formData.password === formData.confirmPassword
+                              ? "#16a34a"
+                              : "#dc2626",
+                        }}
+                      >
+                        {formData.password === formData.confirmPassword
+                          ? "✓"
+                          : "✗"}{" "}
+                        Passwords match
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

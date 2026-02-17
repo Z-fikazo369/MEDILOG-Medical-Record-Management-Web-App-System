@@ -2,7 +2,7 @@ export interface User {
   _id: string;
   username: string;
   email: string;
-  role: 'student' | 'admin';
+  role: "student" | "admin" | "staff";
   isVerified: boolean;
   firstLoginCompleted: boolean;
   rememberMe: boolean;

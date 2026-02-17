@@ -9,7 +9,6 @@ import PhysicalExam from "../models/PhysicalExam.js";
 import MedicalMonitoring from "../models/MedicalMonitoring.js";
 import MedicalCertificate from "../models/MedicalCertificate.js";
 import Notification from "../models/Notification.js";
-import AdminActivityLog from "../models/AdminActivityLog.js";
 
 // Utility to get the current directory name in ES Modules
 const __filename = fileURLToPath(import.meta.url);
@@ -26,7 +25,7 @@ const ensureBackupDir = async () => {
   } catch (error) {
     console.error("Failed to create backup directory:", error);
     throw new Error(
-      "Server storage access denied. Check file permissions for 'backups' folder."
+      "Server storage access denied. Check file permissions for 'backups' folder.",
     );
   }
 };
@@ -92,7 +91,7 @@ export const createSystemBackup = async (req, res) => {
     await fs.writeFile(
       outputFilePath,
       JSON.stringify(backupData, null, 2),
-      "utf-8"
+      "utf-8",
     );
 
     console.log(`[Backup SUCCESS]: JSON file created at ${outputFilePath}`);
@@ -124,7 +123,7 @@ export const getBackupList = async (req, res) => {
           (dirent) =>
             dirent.isFile() &&
             dirent.name.startsWith("MEDILOG_Backup_") &&
-            dirent.name.endsWith(DUMP_EXTENSION)
+            dirent.name.endsWith(DUMP_EXTENSION),
         )
         .map(async (dirent) => {
           const fullPath = path.join(BACKUP_DIR, dirent.name);
@@ -135,12 +134,12 @@ export const getBackupList = async (req, res) => {
             date: stats.birthtime.toISOString(),
             size: `${(stats.size / (1024 * 1024)).toFixed(2)} MB`, // Convert bytes to MB
           };
-        })
+        }),
     );
 
     // Sort by newest first
     backupList.sort(
-      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
     );
 
     return res.status(200).json({ backups: backupList });

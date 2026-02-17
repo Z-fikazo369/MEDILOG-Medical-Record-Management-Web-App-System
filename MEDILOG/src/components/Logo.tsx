@@ -1,12 +1,25 @@
 import React from "react";
 
-const Logo: React.FC = () => {
+interface LogoProps {
+  size?: "small" | "medium" | "large";
+  showText?: boolean;
+}
+
+const Logo: React.FC<LogoProps> = ({ size = "large", showText = true }) => {
+  const sizeMap = {
+    small: 35,
+    medium: 50,
+    large: 70,
+  };
+
+  const dimension = sizeMap[size];
+
   return (
-    <div className="logo-section">
+    <div className="logo-section" style={showText ? {} : { gap: 0 }}>
       <div className="logo-icon">
         <svg
-          width="70"
-          height="70"
+          width={dimension}
+          height={dimension}
           viewBox="0 0 70 70"
           fill="none"
           xmlns="http://www.w3.org/2000/svg"
@@ -21,7 +34,7 @@ const Logo: React.FC = () => {
           <rect x="20" y="31" width="30" height="8" rx="2" fill="white" />
         </svg>
       </div>
-      <h1 className="logo-text">MEDILOG</h1>
+      {showText && <h1 className="logo-text">MEDILOG</h1>}
     </div>
   );
 };

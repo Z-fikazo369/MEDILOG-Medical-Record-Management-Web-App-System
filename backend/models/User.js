@@ -7,8 +7,8 @@ const userSchema = new mongoose.Schema(
     username: { type: String, required: true },
     email: { type: String, required: true, unique: true },
     password: { type: String }, // Plain text muna, iha-hash ng pre-save hook
-    lrn: { type: String, required: true },
-    studentId: { type: String, required: true },
+    lrn: { type: String },
+    studentId: { type: String },
 
     // Media
     profilePictureUrl: { type: String, default: "" },
@@ -19,8 +19,16 @@ const userSchema = new mongoose.Schema(
     program: { type: String },
     yearLevel: { type: String },
 
+    // Staff Details
+    employeeId: { type: String },
+    position: { type: String },
+
     // System Fields
-    role: { type: String, enum: ["student", "admin"], default: "student" },
+    role: {
+      type: String,
+      enum: ["student", "admin", "staff"],
+      default: "student",
+    },
     status: {
       type: String,
       enum: ["pending", "approved", "rejected"],
@@ -36,11 +44,13 @@ const userSchema = new mongoose.Schema(
     isVerified: { type: Boolean, default: false },
     firstLoginCompleted: { type: Boolean, default: false },
     rememberMe: { type: Boolean, default: false },
+    rememberMeExpiry: { type: Date },
+    lastLoginAt: { type: Date },
     otp: { type: String },
     otpExpiry: { type: Date },
     approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 // ✅ CRITICAL FIX: Ito ang pipigil sa Double Hashing

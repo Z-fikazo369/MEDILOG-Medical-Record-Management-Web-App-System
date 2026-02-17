@@ -10,7 +10,8 @@ import medicalRecordRoutes from "./routes/medicalRecordRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
 import analyticsRoutes from "./routes/analyticsRoutes.js";
-import adminActivityRoutes from "./routes/adminActivityRoutes.js";
+import pharmacyRoutes from "./routes/pharmacyRoutes.js";
+import aiAssistantRoutes from "./routes/aiAssistantRoutes.js";
 
 const app = express();
 
@@ -21,7 +22,7 @@ app.use(
     credentials: true,
     // 👇 ITO ANG MAHALAGA: Para mabasa ng frontend ang headers na ito
     exposedHeaders: ["RateLimit-Limit", "RateLimit-Remaining", "Retry-After"],
-  })
+  }),
 );
 app.use(express.json());
 
@@ -41,8 +42,11 @@ app.use("/api", notificationRoutes);
 
 app.use("/api/analytics", analyticsRoutes);
 
-// ✅ NEW ROUTE: Admin activity logs
-app.use("/api", adminActivityRoutes);
+// ✅ NEW ROUTE: Pharmacy Inventory
+app.use("/api/pharmacy", pharmacyRoutes);
+
+// ✅ NEW ROUTE: AI Assistant
+app.use("/api/ai-assistant", aiAssistantRoutes);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {

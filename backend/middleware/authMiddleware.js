@@ -33,14 +33,14 @@ export const protect = async (req, res, next) => {
   }
 };
 
-// 2. Middleware para i-check kung ang role ay 'admin'
+// 2. Middleware para i-check kung ang role ay 'admin' or 'staff'
 export const isAdmin = (req, res, next) => {
   // Titingnan nito 'yung 'req.user' na galing sa 'protect' middleware
-  if (req.user && req.user.role === "admin") {
+  if (req.user && (req.user.role === "admin" || req.user.role === "staff")) {
     //
-    next(); // Admin, pwede magpatuloy
+    next(); // Admin or Staff, pwede magpatuloy
   } else {
-    // 403 Forbidden - Valid 'yung login, pero hindi admin
+    // 403 Forbidden - Valid 'yung login, pero hindi admin/staff
     res.status(403).json({ message: "Not authorized. Admin access only." });
   }
 };

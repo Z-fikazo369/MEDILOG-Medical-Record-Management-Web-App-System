@@ -519,12 +519,6 @@
   }
 }
 
-/* Dark Mode Specific Tweaks */
-[data-theme="dark"] .hero-logo-main {
-  background: #222; /* Darker background for logo container in dark mode */
-  border-color: #444;
-}
-
 /* --- FEATURES SECTION (HORIZONTAL GRID) --- */
 .features-section {
   padding: 100px 5%;
