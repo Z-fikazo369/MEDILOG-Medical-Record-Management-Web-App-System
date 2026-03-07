@@ -1,0 +1,83 @@
+@startuml MEDILOG_UseCaseDiagram
+
+' ===== LANDSCAPE LAYOUT =====
+left to right direction
+skinparam actorStyle awesome
+skinparam packageStyle rectangle
+skinparam dpi 150
+skinparam defaultFontSize 12
+skinparam usecase {
+  BackgroundColor #F5F5F5
+  BorderColor #444444
+  FontSize 11
+}
+skinparam rectangle {
+  BackgroundColor #FFFFFF
+  BorderColor #222222
+  FontSize 14
+  FontStyle bold
+}
+
+' ===== ACTORS =====
+actor "Student" as Student
+actor "Infirmary\nStaff" as Staff
+
+' ===== SYSTEM BOUNDARY =====
+rectangle "MEDILOG - Medical Records Management System" {
+
+  ' --- Shared ---
+  usecase "Register Account" as UC_Register
+  usecase "Login with\nOTP Verification" as UC_Login
+  usecase "Manage Profile\n& Change Password" as UC_Profile
+  usecase "View Notifications" as UC_Notif
+
+  ' --- Student Features ---
+  usecase "Submit Physical\nExam Record" as UC_PE
+  usecase "Submit Medical\nMonitoring Record" as UC_MM
+  usecase "Submit Medical\nCertificate Request" as UC_MC
+  usecase "Submit Medicine\nIssuance Request" as UC_MI
+  usecase "Submit Laboratory\nRequest" as UC_LR
+  usecase "View Record\nStatus & History" as UC_ViewRecords
+
+  ' --- Staff/Admin Features ---
+  usecase "Review & Approve/\nReject Records" as UC_Review
+  usecase "Manage Pharmacy\nInventory" as UC_Pharmacy
+  usecase "AI Audio\nTranscription" as UC_Audio
+  usecase "AI Image OCR\n& PDF Extraction" as UC_OCR
+  usecase "View Analytics\nDashboard" as UC_Analytics
+  usecase "View Predictive\nAnalytics" as UC_Predictive
+  usecase "Manage Student\n& Staff Accounts" as UC_Accounts
+  usecase "Export Records\n(CSV/Excel)" as UC_Export
+  usecase "System Backup\n& Restore" as UC_Backup
+  usecase "View Activity\nLogs" as UC_Logs
+
+}
+
+' ===== STUDENT ASSOCIATIONS =====
+Student --> UC_Register
+Student --> UC_Login
+Student --> UC_Profile
+Student --> UC_Notif
+Student --> UC_PE
+Student --> UC_MM
+Student --> UC_MC
+Student --> UC_MI
+Student --> UC_LR
+Student --> UC_ViewRecords
+
+' ===== STAFF/ADMIN ASSOCIATIONS =====
+Staff --> UC_Login
+Staff --> UC_Profile
+Staff --> UC_Notif
+Staff --> UC_Review
+Staff --> UC_Pharmacy
+Staff --> UC_Audio
+Staff --> UC_OCR
+Staff --> UC_Analytics
+Staff --> UC_Predictive
+Staff --> UC_Accounts
+Staff --> UC_Export
+Staff --> UC_Backup
+Staff --> UC_Logs
+
+@enduml

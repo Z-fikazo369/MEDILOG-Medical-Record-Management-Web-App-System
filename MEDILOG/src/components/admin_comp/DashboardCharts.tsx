@@ -148,7 +148,13 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ data }) => {
     <div className="row g-3 mb-4">
       {/* Monthly Trends (Line Chart) */}
       <div className="col-12 col-lg-6">
-        <div className="card border-0 shadow-sm h-100">
+        <div
+          className="card shadow-sm h-100"
+          style={{
+            border: "1px solid #e5e7eb",
+            borderLeft: "4px solid #10b981",
+          }}
+        >
           <div className="card-body">
             <div className="d-flex align-items-center gap-2 mb-3">
               <i
@@ -252,7 +258,13 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ data }) => {
 
       {/* Activity Distribution (Donut Chart) */}
       <div className="col-12 col-lg-6">
-        <div className="card border-0 shadow-sm h-100">
+        <div
+          className="card shadow-sm h-100"
+          style={{
+            border: "1px solid #e5e7eb",
+            borderLeft: "4px solid #3b82f6",
+          }}
+        >
           <div className="card-body">
             <div className="d-flex align-items-center gap-2 mb-3">
               <i

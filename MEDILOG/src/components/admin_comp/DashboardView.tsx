@@ -251,7 +251,13 @@ const DashboardView: React.FC<DashboardViewProps> = ({
         <div className="row g-3 mb-4">
           {/* Student Accounts */}
           <div className="col-12 col-md-4">
-            <div className="card border-0 shadow-sm h-100">
+            <div
+              className="card shadow-sm h-100"
+              style={{
+                border: "1px solid #e5e7eb",
+                borderLeft: "4px solid #2c5f2d",
+              }}
+            >
               <div className="card-body">
                 <div
                   className="d-flex align-items-center gap-2 mb-3"
@@ -285,7 +291,13 @@ const DashboardView: React.FC<DashboardViewProps> = ({
 
           {/* Staff Accounts */}
           <div className="col-12 col-md-4">
-            <div className="card border-0 shadow-sm h-100">
+            <div
+              className="card shadow-sm h-100"
+              style={{
+                border: "1px solid #e5e7eb",
+                borderLeft: "4px solid #3b82f6",
+              }}
+            >
               <div className="card-body">
                 <div
                   className="d-flex align-items-center gap-2 mb-3"
@@ -319,7 +331,13 @@ const DashboardView: React.FC<DashboardViewProps> = ({
 
           {/* Patient Records */}
           <div className="col-12 col-md-4">
-            <div className="card border-0 shadow-sm h-100">
+            <div
+              className="card shadow-sm h-100"
+              style={{
+                border: "1px solid #e5e7eb",
+                borderLeft: "4px solid #8b5cf6",
+              }}
+            >
               <div className="card-body">
                 <div
                   className="d-flex align-items-center gap-2 mb-3"

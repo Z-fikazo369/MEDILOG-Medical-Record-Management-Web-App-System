@@ -18,7 +18,6 @@ const StudentSidebar: React.FC<StudentSidebarProps> = ({
   onNotificationsClick,
   onLogout,
   collapsed,
-  onToggleCollapse,
 }) => {
   // State para sa dropdown toggle
   const [isFormDropdownOpen, setIsFormDropdownOpen] = useState(false);
@@ -105,7 +104,7 @@ const StudentSidebar: React.FC<StudentSidebarProps> = ({
 
           {/* Sub-menu items */}
           {isFormDropdownOpen && !collapsed && (
-            <ul className="nav flex-column ms-3 mt-2 border-start border-2 ps-2">
+            <ul className="nav flex-column form-submenu">
               <li className="nav-item">
                 <a
                   href="#"
@@ -113,8 +112,9 @@ const StudentSidebar: React.FC<StudentSidebarProps> = ({
                     e.preventDefault();
                     setActiveView("newStudent");
                   }}
-                  className={`nav-link py-1 ${activeView === "newStudent" ? "fw-bold text-success" : "text-muted"}`}
+                  className={`nav-link form-submenu-item py-1 ${activeView === "newStudent" ? "form-submenu-active" : ""}`}
                 >
+                  <i className="bi bi-person-vcard me-2"></i>
                   Physical Examination
                 </a>
               </li>
@@ -125,8 +125,9 @@ const StudentSidebar: React.FC<StudentSidebarProps> = ({
                     e.preventDefault();
                     setActiveView("monitoring");
                   }}
-                  className={`nav-link py-1 ${activeView === "monitoring" ? "fw-bold text-success" : "text-muted"}`}
+                  className={`nav-link form-submenu-item py-1 ${activeView === "monitoring" ? "form-submenu-active" : ""}`}
                 >
+                  <i className="bi bi-heart-pulse me-2"></i>
                   Medical Monitoring
                 </a>
               </li>
@@ -137,8 +138,9 @@ const StudentSidebar: React.FC<StudentSidebarProps> = ({
                     e.preventDefault();
                     setActiveView("certificate");
                   }}
-                  className={`nav-link py-1 ${activeView === "certificate" ? "fw-bold text-success" : "text-muted"}`}
+                  className={`nav-link form-submenu-item py-1 ${activeView === "certificate" ? "form-submenu-active" : ""}`}
                 >
+                  <i className="bi bi-file-earmark-medical me-2"></i>
                   Medical Certificate
                 </a>
               </li>
@@ -149,8 +151,9 @@ const StudentSidebar: React.FC<StudentSidebarProps> = ({
                     e.preventDefault();
                     setActiveView("medicineIssuance");
                   }}
-                  className={`nav-link py-1 ${activeView === "medicineIssuance" ? "fw-bold text-success" : "text-muted"}`}
+                  className={`nav-link form-submenu-item py-1 ${activeView === "medicineIssuance" ? "form-submenu-active" : ""}`}
                 >
+                  <i className="bi bi-capsule me-2"></i>
                   Medicine Issuance
                 </a>
               </li>
@@ -161,8 +164,9 @@ const StudentSidebar: React.FC<StudentSidebarProps> = ({
                     e.preventDefault();
                     setActiveView("laboratoryRequest");
                   }}
-                  className={`nav-link py-1 ${activeView === "laboratoryRequest" ? "fw-bold text-success" : "text-muted"}`}
+                  className={`nav-link form-submenu-item py-1 ${activeView === "laboratoryRequest" ? "form-submenu-active" : ""}`}
                 >
+                  <i className="bi bi-clipboard2-pulse me-2"></i>
                   Laboratory Request
                 </a>
               </li>
@@ -185,6 +189,8 @@ const StudentSidebar: React.FC<StudentSidebarProps> = ({
           </a>
         </li>
 
+        <hr className="sidebar-separator" />
+
         {/* Notifications */}
         <li className="nav-item">
           <a
@@ -205,6 +211,7 @@ const StudentSidebar: React.FC<StudentSidebarProps> = ({
 
       {/* Logout */}
       <div className="mt-auto">
+        <hr className="sidebar-separator" />
         <a href="#" onClick={onLogout} className="nav-link text-danger">
           <i className="bi bi-box-arrow-right me-2"></i>{" "}
           {!collapsed && "Logout"}

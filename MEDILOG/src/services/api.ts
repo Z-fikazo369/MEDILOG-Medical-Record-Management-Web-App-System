@@ -112,6 +112,7 @@ export interface OTPData {
 
 export interface ForgotPasswordData {
   email: string;
+  loginRole?: string;
 }
 
 export interface ResetPasswordData {
@@ -376,11 +377,44 @@ export const medicalAPI = {
     return response.data;
   },
 
-  getAggregation: async (recordType: string) => {
-    const response = await api.get(
-      `/records/aggregation?recordType=${recordType}`,
-    );
+  getAggregation: async (
+    recordType: string,
+    dateFrom?: string,
+    dateTo?: string,
+    extraFilters?: Record<string, string>,
+  ) => {
+    let url = `/records/aggregation?recordType=${recordType}`;
+    if (dateFrom) url += `&dateFrom=${dateFrom}`;
+    if (dateTo) url += `&dateTo=${dateTo}`;
+    if (extraFilters) {
+      Object.entries(extraFilters)
+        .filter(([, v]) => v)
+        .forEach(([k, v]) => {
+          url += `&${k}=${encodeURIComponent(v)}`;
+        });
+    }
+    const response = await api.get(url);
     return response.data;
+  },
+
+  exportTallyRecords: async (
+    recordType: string,
+    dateFrom?: string,
+    dateTo?: string,
+    extraFilters?: Record<string, string>,
+  ) => {
+    let url = `/records/tally-export?recordType=${recordType}`;
+    if (dateFrom) url += `&dateFrom=${dateFrom}`;
+    if (dateTo) url += `&dateTo=${dateTo}`;
+    if (extraFilters) {
+      Object.entries(extraFilters)
+        .filter(([, v]) => v)
+        .forEach(([k, v]) => {
+          url += `&${k}=${encodeURIComponent(v)}`;
+        });
+    }
+    const response = await api.get(url, { responseType: "blob" });
+    return response;
   },
 
   exportRecords: async (
@@ -430,8 +464,57 @@ export const medicalAPI = {
     return response.data;
   },
 
+  // Admin notifications
+  getAdminNotifications: async () => {
+    const response = await api.get("/notifications/admin");
+    return response.data;
+  },
+
+  getAdminUnreadCount: async () => {
+    const response = await api.get("/notifications/admin/unread-count");
+    return response.data;
+  },
+
+  markAdminNotificationsAsRead: async () => {
+    const response = await api.post("/notifications/admin/mark-read");
+    return response.data;
+  },
+
   getMedicineList: async () => {
     const response = await api.get("/pharmacy/medicine-list");
+    return response.data;
+  },
+};
+
+// ✅ Admin Management API (Activity Logs, etc.)
+export const adminAPI = {
+  getActivityLogs: async (
+    params: {
+      page?: number;
+      limit?: number;
+      action?: string;
+      search?: string;
+      startDate?: string;
+      endDate?: string;
+      staffId?: string;
+    } = {},
+  ) => {
+    const searchParams = new URLSearchParams();
+    if (params.page) searchParams.set("page", String(params.page));
+    if (params.limit) searchParams.set("limit", String(params.limit));
+    if (params.action) searchParams.set("action", params.action);
+    if (params.search) searchParams.set("search", params.search);
+    if (params.startDate) searchParams.set("startDate", params.startDate);
+    if (params.endDate) searchParams.set("endDate", params.endDate);
+    if (params.staffId) searchParams.set("staffId", params.staffId);
+    const response = await api.get(
+      `/users/activity-logs?${searchParams.toString()}`,
+    );
+    return response.data;
+  },
+
+  getStaffSummary: async () => {
+    const response = await api.get("/users/activity-logs/staff-summary");
     return response.data;
   },
 };

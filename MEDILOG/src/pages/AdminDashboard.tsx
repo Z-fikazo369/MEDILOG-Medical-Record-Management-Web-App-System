@@ -12,6 +12,7 @@ import BackupRestoreView from "../components/admin_comp/BackupRestoreView";
 import StaffAccountsView from "../components/admin_comp/StaffAccountsView";
 import PharmacyInventoryView from "../components/admin_comp/PharmacyInventoryView";
 import AiAssistantView from "../components/admin_comp/AiAssistantView";
+import StaffActivityView from "../components/admin_comp/StaffActivityView";
 import FaceCaptureModal from "../components/common/FaceCaptureModal";
 import LoadingOverlay from "../components/common/LoadingOverlay";
 
@@ -24,7 +25,8 @@ type ViewType =
   | "staffAccounts"
   | "pharmacy"
   | "backup"
-  | "aiAssistant";
+  | "aiAssistant"
+  | "activityLog";
 type RecordType =
   | "physicalExam"
   | "monitoring"
@@ -56,38 +58,132 @@ const AdminDashboard: React.FC = () => {
   const [showFaceCaptureModal, setShowFaceCaptureModal] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
-  // --- Fetch pending count for sidebar badge ---
+  // --- Admin Notifications ---
+  const [adminNotifications, setAdminNotifications] = useState<any[]>([]);
+  const [adminUnreadCount, setAdminUnreadCount] = useState(0);
+  const [showNotifDropdown, setShowNotifDropdown] = useState(false);
+  const notifDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        notifDropdownRef.current &&
+        !notifDropdownRef.current.contains(e.target as Node)
+      ) {
+        setShowNotifDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // --- Fetch all admin data (pending counts + notifications) ---
+  const fetchAdminData = async (silent = false) => {
+    if (!user) return;
+    try {
+      const [pendingData, staffData, recordData, unreadData] =
+        await Promise.all([
+          authAPI.getPendingAccounts(),
+          authAPI.getPendingStaffAccounts(),
+          medicalAPI.getPendingRecordCounts(),
+          medicalAPI.getAdminUnreadCount(),
+        ]);
+      setPendingCount(pendingData.count || 0);
+      setStaffPendingCount(staffData.count || 0);
+      setRecordPendingCounts(recordData);
+      setAdminUnreadCount(unreadData.count || 0);
+    } catch (error) {
+      if (!silent) console.error("Failed to fetch admin data:", error);
+    }
+  };
+
+  // Initial fetch + polling every 5 seconds
   useEffect(() => {
     if (!user) return;
-    const fetchPending = async () => {
-      try {
-        const data = await authAPI.getPendingAccounts();
-        setPendingCount(data.count || 0);
-      } catch (error) {
-        console.error("Failed to fetch pending count:", error);
-      }
-    };
-    const fetchStaffPending = async () => {
-      try {
-        const data = await authAPI.getPendingStaffAccounts();
-        setStaffPendingCount(data.count || 0);
-      } catch (error) {
-        console.error("Failed to fetch staff pending count:", error);
-      }
-    };
-    fetchPending();
-    fetchStaffPending();
+    fetchAdminData();
 
-    const fetchRecordPendingCounts = async () => {
-      try {
-        const data = await medicalAPI.getPendingRecordCounts();
-        setRecordPendingCounts(data);
-      } catch (error) {
-        console.error("Failed to fetch record pending counts:", error);
-      }
-    };
-    fetchRecordPendingCounts();
+    const intervalId = setInterval(() => {
+      fetchAdminData(true);
+    }, 5000);
+
+    return () => clearInterval(intervalId);
   }, [user]);
+
+  // Load full notifications when dropdown opens
+  const handleNotifBellClick = async () => {
+    setShowNotifDropdown((prev) => !prev);
+    if (!showNotifDropdown) {
+      try {
+        const data = await medicalAPI.getAdminNotifications();
+        setAdminNotifications(data.notifications || []);
+        // Mark as read
+        await medicalAPI.markAdminNotificationsAsRead();
+        setAdminUnreadCount(0);
+      } catch (error) {
+        console.error("Failed to load admin notifications:", error);
+      }
+    }
+  };
+
+  const getRelativeTime = (dateStr: string): string => {
+    const now = new Date();
+    const date = new Date(dateStr);
+    const diffMs = now.getTime() - date.getTime();
+    const diffSec = Math.floor(diffMs / 1000);
+    const diffMin = Math.floor(diffSec / 60);
+    const diffHr = Math.floor(diffMin / 60);
+    const diffDay = Math.floor(diffHr / 24);
+    if (diffSec < 60) return "Just now";
+    if (diffMin < 60) return `${diffMin}m ago`;
+    if (diffHr < 24) return `${diffHr}h ago`;
+    if (diffDay < 7) return `${diffDay}d ago`;
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+    });
+  };
+
+  const getNotifIconInfo = (recordType: string) => {
+    switch (recordType) {
+      case "physicalExam":
+        return {
+          icon: "bi-person-vcard",
+          color: "#10b981",
+          bg: "rgba(16,185,129,0.1)",
+        };
+      case "monitoring":
+        return {
+          icon: "bi-heart-pulse",
+          color: "#8b5cf6",
+          bg: "rgba(139,92,246,0.1)",
+        };
+      case "certificate":
+        return {
+          icon: "bi-file-earmark-medical",
+          color: "#3b82f6",
+          bg: "rgba(59,130,246,0.1)",
+        };
+      case "medicineIssuance":
+        return {
+          icon: "bi-capsule",
+          color: "#f59e0b",
+          bg: "rgba(245,158,11,0.1)",
+        };
+      case "laboratoryRequest":
+        return {
+          icon: "bi-clipboard2-pulse",
+          color: "#ef4444",
+          bg: "rgba(239,68,68,0.1)",
+        };
+      default:
+        return {
+          icon: "bi-bell",
+          color: "#6b7280",
+          bg: "rgba(107,114,128,0.1)",
+        };
+    }
+  };
 
   const handleLogout = () => {
     setLoggingOut(true);
@@ -215,11 +311,12 @@ const AdminDashboard: React.FC = () => {
   return (
     <>
       <LoadingOverlay show={loggingOut} message="Signing out..." />
-      <div className="d-flex">
+      <div className="d-flex admin-wrapper">
         {/* --- SIDEBAR --- */}
         <AdminSidebar
           view={view}
           setView={setView}
+          recordType={recordType}
           setRecordType={setRecordType}
           pendingCount={pendingCount}
           staffPendingCount={staffPendingCount}
@@ -231,9 +328,7 @@ const AdminDashboard: React.FC = () => {
           userPosition={user?.position}
         />
 
-        <div
-          className={`flex-grow-1 d-flex flex-column ${sidebarCollapsed ? "sidebar-collapsed-margin" : ""}`}
-        >
+        <div className={`flex-grow-1 d-flex flex-column`}>
           {/* --- HEADER --- */}
           <header className="main-header d-flex justify-content-between align-items-center">
             <div className="d-flex align-items-center gap-3">
@@ -246,70 +341,233 @@ const AdminDashboard: React.FC = () => {
                 <i className="bi bi-list" style={{ fontSize: "1.3rem" }}></i>
               </button>
               <div>
-                <h3 className="fw-bold text-dark mb-0">
-                  {view === "dashboard"
-                    ? `Hello ${user?.position || "Admin"}!`
-                    : view === "accounts"
-                      ? "Student Accounts"
-                      : view === "staffAccounts"
-                        ? "Staff Accounts"
-                        : view === "pharmacy"
-                          ? "Pharmacy Inventory"
-                          : view === "patientRecords"
-                            ? "Medical Records"
-                            : view === "backup"
-                              ? "System Backup"
-                              : "AI Assistant"}
-                </h3>
-                {view === "dashboard" && (
-                  <p className="text-muted mb-0 small">
-                    Welcome to your dashboard!
-                  </p>
-                )}
-                {view === "accounts" && (
-                  <p className="text-muted mb-0 small">
-                    Manage student records and information
-                  </p>
-                )}
-                {view === "staffAccounts" && (
-                  <p className="text-muted mb-0 small">
-                    Manage staff members and permissions
-                  </p>
-                )}
-                {view === "pharmacy" && (
-                  <p className="text-muted mb-0 small">
-                    Track medicine stock and inventory
-                  </p>
-                )}
-                {view === "aiAssistant" && (
-                  <p className="text-muted mb-0 small">
-                    Audio-to-text and image-to-text tools
-                  </p>
-                )}
+                <h5
+                  className="mb-0"
+                  style={{
+                    color: "var(--primary-green)",
+                    fontWeight: 700,
+                    fontSize: "1.4rem",
+                    letterSpacing: "0.3px",
+                  }}
+                >
+                  Admin Portal
+                </h5>
               </div>
             </div>
 
-            <div className="d-flex align-items-center gap-4">
+            <div className="d-flex align-items-center gap-3">
+              {/* View title + greeting */}
+              <div className="text-end d-none d-sm-block">
+                <span
+                  style={{
+                    fontWeight: 600,
+                    fontSize: "0.95rem",
+                    color: "var(--text-dark)",
+                  }}
+                >
+                  Welcome! 👋
+                </span>
+                <p
+                  className="mb-0"
+                  style={{
+                    fontSize: "0.78rem",
+                    color: "var(--text-muted)",
+                  }}
+                >
+                  {user?.position || "Administrator"}
+                </p>
+              </div>
+
+              {/* Notification Bell */}
+              <div ref={notifDropdownRef} style={{ position: "relative" }}>
+                <div
+                  className="notification-btn-container"
+                  onClick={handleNotifBellClick}
+                >
+                  <i className="bi bi-bell"></i>
+                  {adminUnreadCount > 0 && (
+                    <span className="header-badge">{adminUnreadCount}</span>
+                  )}
+                </div>
+
+                {/* Notification Dropdown */}
+                {showNotifDropdown && (
+                  <div className="admin-notif-dropdown">
+                    <div className="admin-notif-header">
+                      <span
+                        className="fw-semibold"
+                        style={{ fontSize: "0.85rem" }}
+                      >
+                        Notifications
+                      </span>
+                      <span
+                        style={{
+                          fontSize: "0.68rem",
+                          color: "#94a3b8",
+                          background: "#f1f5f9",
+                          padding: "2px 8px",
+                          borderRadius: 12,
+                        }}
+                      >
+                        {adminNotifications.length}
+                      </span>
+                    </div>
+                    <div className="admin-notif-body">
+                      {adminNotifications.length === 0 ? (
+                        <div className="text-center py-4">
+                          <i
+                            className="bi bi-bell-slash"
+                            style={{ fontSize: "1.8rem", color: "#cbd5e1" }}
+                          ></i>
+                          <p
+                            style={{
+                              color: "#94a3b8",
+                              fontSize: "0.78rem",
+                              marginTop: 6,
+                              marginBottom: 0,
+                            }}
+                          >
+                            No new notifications
+                          </p>
+                        </div>
+                      ) : (
+                        adminNotifications
+                          .slice(0, 8)
+                          .map((notif: any, idx: number) => {
+                            const iconInfo = getNotifIconInfo(notif.recordType);
+                            return (
+                              <div
+                                key={notif._id || idx}
+                                className={`admin-notif-item${!notif.isRead ? " admin-notif-unread" : ""}`}
+                              >
+                                <div
+                                  style={{
+                                    width: 32,
+                                    height: 32,
+                                    borderRadius: 8,
+                                    background: iconInfo.bg,
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    flexShrink: 0,
+                                  }}
+                                >
+                                  <i
+                                    className={`bi ${iconInfo.icon}`}
+                                    style={{
+                                      color: iconInfo.color,
+                                      fontSize: "0.9rem",
+                                    }}
+                                  ></i>
+                                </div>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <p
+                                    style={{
+                                      fontSize: "0.76rem",
+                                      fontWeight: !notif.isRead ? 600 : 400,
+                                      color: "#1e293b",
+                                      margin: 0,
+                                      lineHeight: 1.35,
+                                      overflow: "hidden",
+                                      textOverflow: "ellipsis",
+                                      display: "-webkit-box",
+                                      WebkitLineClamp: 2,
+                                      WebkitBoxOrient: "vertical",
+                                    }}
+                                  >
+                                    {notif.message}
+                                  </p>
+                                  <span
+                                    style={{
+                                      fontSize: "0.65rem",
+                                      color: "#94a3b8",
+                                    }}
+                                  >
+                                    {getRelativeTime(notif.createdAt)}
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Profile */}
               <div
                 onClick={() => setShowUploadModal(true)}
-                className="d-flex align-items-center gap-3 cursor-pointer"
+                style={{ cursor: "pointer" }}
               >
-                <div className="text-end d-none d-sm-block">
-                  <h6 className="mb-0 fw-bold">{user?.username}</h6>
-                  <small className="text-muted" style={{ fontSize: "0.75rem" }}>
-                    {user?.position || "Administrator"}
-                  </small>
-                </div>
                 <img
                   src={getAvatarSrc()}
                   alt="Admin"
-                  className="rounded-circle shadow-sm border border-2 border-black"
-                  style={{ width: "45px", height: "45px", objectFit: "cover" }}
+                  className="rounded-circle shadow-sm"
+                  style={{
+                    width: "48px",
+                    height: "48px",
+                    objectFit: "cover",
+                    border: "3px solid var(--text-dark, #000)",
+                  }}
                 />
               </div>
             </div>
           </header>
+
+          {/* --- VIEW TITLE CARD --- */}
+          <div className="content-view-header">
+            <h4 className="content-view-title">
+              <i
+                className={`bi ${
+                  view === "dashboard"
+                    ? "bi-grid-1x2-fill"
+                    : view === "accounts"
+                      ? "bi-people-fill"
+                      : view === "staffAccounts"
+                        ? "bi-person-gear"
+                        : view === "pharmacy"
+                          ? "bi-capsule"
+                          : view === "patientRecords"
+                            ? "bi-journal-medical"
+                            : view === "backup"
+                              ? "bi-cloud-arrow-up-fill"
+                              : view === "activityLog"
+                                ? "bi-clock-history"
+                                : "bi-robot"
+                } me-2`}
+              ></i>
+              {view === "dashboard"
+                ? "Dashboard Overview"
+                : view === "accounts"
+                  ? "Student Accounts"
+                  : view === "staffAccounts"
+                    ? "Staff Accounts"
+                    : view === "pharmacy"
+                      ? "Pharmacy Inventory"
+                      : view === "patientRecords"
+                        ? "Medical Records"
+                        : view === "backup"
+                          ? "System Backup"
+                          : view === "activityLog"
+                            ? "Activity Log"
+                            : "AI Assistant"}
+            </h4>
+            <p className="content-view-subtitle">
+              {view === "dashboard" &&
+                "Monitor system performance and activity at a glance."}
+              {view === "accounts" && "Manage student records and information."}
+              {view === "staffAccounts" &&
+                "Manage staff members and permissions."}
+              {view === "pharmacy" && "Track medicine stock and inventory."}
+              {view === "patientRecords" && "View and manage medical records."}
+              {view === "backup" && "Backup and restore system data."}
+              {view === "activityLog" &&
+                "Track staff transactions and system activity."}
+              {view === "aiAssistant" &&
+                "Audio-to-text and image-to-text tools."}
+            </p>
+          </div>
 
           <div className="content">
             {/* --- DASHBOARD VIEW (kept mounted, hidden via CSS to preserve state) --- */}
@@ -349,6 +607,9 @@ const AdminDashboard: React.FC = () => {
             {!isLimitedStaff && view === "backup" && user && (
               <BackupRestoreView adminUsername={user.username} />
             )}
+
+            {/* --- ACTIVITY LOG VIEW --- */}
+            {!isLimitedStaff && view === "activityLog" && <StaffActivityView />}
 
             {/* --- AI ASSISTANT VIEW --- */}
             {view === "aiAssistant" && <AiAssistantView />}

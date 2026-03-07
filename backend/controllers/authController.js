@@ -614,10 +614,29 @@ export async function resendOTP(req, res) {
 // 🔒 Forgot Password
 export async function forgotPassword(req, res) {
   try {
-    const { email } = req.body;
+    const { email, loginRole } = req.body;
     const user = await User.findOne({ email });
     if (!user) {
       return res.status(400).json({ message: "User not found" });
+    }
+
+    // Validate that the email belongs to the correct role context
+    if (loginRole === "admin") {
+      // Staff/Admin login context – only allow admin or staff accounts
+      if (user.role !== "admin" && user.role !== "staff") {
+        return res.status(400).json({
+          message:
+            "This email is not associated with a staff account. Please use the correct email for your staff account.",
+        });
+      }
+    } else if (loginRole === "student") {
+      // Student login context – only allow student accounts
+      if (user.role !== "student") {
+        return res.status(400).json({
+          message:
+            "This email is not associated with a student account. Please use your student email.",
+        });
+      }
     }
     const otp = generateOTP();
     user.otp = otp;
@@ -825,11 +844,57 @@ export async function updateStudentAccount(req, res) {
         .json({ message: "Can only update student accounts" });
     }
 
+    // --- Input Validation ---
+    const errors = [];
+
+    if (username !== undefined) {
+      if (!username.trim()) errors.push("Name cannot be empty.");
+      else if (username.trim().length < 2)
+        errors.push("Name must be at least 2 characters.");
+    }
+
+    if (email !== undefined) {
+      if (!email.trim()) errors.push("Email cannot be empty.");
+      else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+        errors.push("Invalid email format.");
+      else {
+        const existing = await User.findOne({ email, _id: { $ne: userId } });
+        if (existing)
+          errors.push("Email is already in use by another account.");
+      }
+    }
+
+    if (lrn !== undefined) {
+      if (!lrn.trim()) errors.push("LRN cannot be empty.");
+      else if (!/^\d{12}$/.test(lrn))
+        errors.push("LRN must be exactly 12 digits (numbers only).");
+      else {
+        const existing = await User.findOne({ lrn, _id: { $ne: userId } });
+        if (existing) errors.push("LRN is already in use by another account.");
+      }
+    }
+
+    if (studentId !== undefined) {
+      if (!studentId.trim()) errors.push("Student ID cannot be empty.");
+      else {
+        const existing = await User.findOne({
+          studentId,
+          _id: { $ne: userId },
+        });
+        if (existing)
+          errors.push("Student ID is already in use by another account.");
+      }
+    }
+
+    if (errors.length > 0) {
+      return res.status(400).json({ message: errors.join(" ") });
+    }
+
     // Update fields if provided
-    if (username) user.username = username;
-    if (email) user.email = email;
-    if (lrn) user.lrn = lrn;
-    if (studentId) user.studentId = studentId;
+    if (username) user.username = username.trim();
+    if (email) user.email = email.trim();
+    if (lrn) user.lrn = lrn.trim();
+    if (studentId) user.studentId = studentId.trim();
     if (status) user.status = status;
 
     await user.save();

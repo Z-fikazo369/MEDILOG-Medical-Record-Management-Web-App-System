@@ -44,8 +44,14 @@ const PatientRecordsView: React.FC<PatientRecordsViewProps> = ({
   ]);
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(false);
-  const [showFilters, setShowFilters] = useState(false);
-  const [filters, setFilters] = useState<Record<string, string>>({});
+
+  // Tally
+  const [showTally, setShowTally] = useState(false);
+  const [tallyData, setTallyData] = useState<any>(null);
+  const [tallyLoading, setTallyLoading] = useState(false);
+  const [tallyDateFrom, setTallyDateFrom] = useState("");
+  const [tallyDateTo, setTallyDateTo] = useState("");
+  const [tallyFilters, setTallyFilters] = useState<Record<string, string>>({});
 
   // Edit Modal
   const [showEditModal, setShowEditModal] = useState(false);
@@ -59,7 +65,7 @@ const PatientRecordsView: React.FC<PatientRecordsViewProps> = ({
     page: number,
     sort: SortConfig[],
     limit: number = patientRowsPerPage,
-    activeFilters: Record<string, string> = filters,
+    activeFilters: Record<string, string> = {},
   ) => {
     try {
       setLoading(true);
@@ -86,8 +92,11 @@ const PatientRecordsView: React.FC<PatientRecordsViewProps> = ({
   useEffect(() => {
     setPatientCurrentPage(1);
     setSortConfig([{ key: "createdAt", order: "desc" }]);
-    setFilters({});
-    setShowFilters(false);
+    setShowTally(false);
+    setTallyData(null);
+    setTallyDateFrom("");
+    setTallyDateTo("");
+    setTallyFilters({});
     loadRecords(
       1,
       [{ key: "createdAt", order: "desc" }],
@@ -98,7 +107,7 @@ const PatientRecordsView: React.FC<PatientRecordsViewProps> = ({
 
   // Load when page or sort changes
   useEffect(() => {
-    loadRecords(patientCurrentPage, sortConfig, patientRowsPerPage, filters);
+    loadRecords(patientCurrentPage, sortConfig, patientRowsPerPage);
   }, [patientCurrentPage, sortConfig, recordType, patientRowsPerPage]);
 
   // --- CRUD Handlers ---
@@ -232,7 +241,7 @@ const PatientRecordsView: React.FC<PatientRecordsViewProps> = ({
         recordType,
         format,
         sortConfig,
-        filters,
+        {},
       );
 
       const url = window.URL.createObjectURL(new Blob([response.data]));
@@ -429,55 +438,352 @@ const PatientRecordsView: React.FC<PatientRecordsViewProps> = ({
     return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random&color=fff&size=128`;
   };
 
-  // --- Filter Handlers ---
-  const handleFilterChange = (key: string, value: string) => {
-    setFilters((prev) => ({ ...prev, [key]: value }));
+  // --- Tally Logic ---
+  const loadTally = async (
+    from?: string,
+    to?: string,
+    extra?: Record<string, string>,
+  ) => {
+    try {
+      setTallyLoading(true);
+      const data = await medicalAPI.getAggregation(
+        recordType,
+        from || undefined,
+        to || undefined,
+        extra,
+      );
+      setTallyData(data);
+    } catch (error) {
+      console.error("Failed to load tally:", error);
+    } finally {
+      setTallyLoading(false);
+    }
   };
 
-  const applyFilters = () => {
-    setPatientCurrentPage(1);
-    loadRecords(1, sortConfig, patientRowsPerPage, filters);
+  const handleTallyToggle = () => {
+    const next = !showTally;
+    setShowTally(next);
+    // Don't auto-load — user must click Apply with date range
   };
 
-  const clearFilters = () => {
-    setFilters({});
-    setPatientCurrentPage(1);
-    loadRecords(1, sortConfig, patientRowsPerPage, {});
+  const applyTallyDateRange = () => {
+    loadTally(tallyDateFrom, tallyDateTo, tallyFilters);
   };
 
-  const activeFilterCount = Object.values(filters).filter(Boolean).length;
+  const clearTallyDateRange = () => {
+    setTallyDateFrom("");
+    setTallyDateTo("");
+    setTallyFilters({});
+    loadTally("", "", {});
+  };
 
-  const renderFilterBar = () => {
+  const handleTallyFilterChange = (key: string, value: string) => {
+    setTallyFilters((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleTallyExportCSV = async () => {
+    try {
+      const response = await medicalAPI.exportTallyRecords(
+        recordType,
+        tallyDateFrom || undefined,
+        tallyDateTo || undefined,
+        tallyFilters,
+      );
+
+      const date = new Date().toISOString().split("T")[0];
+      const recordName =
+        recordType.charAt(0).toUpperCase() + recordType.slice(1);
+      const defaultName = `Tally_${recordName}_${date}.csv`;
+
+      let fileName = window.prompt(
+        "Please enter a filename for the tally export:",
+        defaultName,
+      );
+      if (!fileName) return;
+      if (!fileName.endsWith(".csv")) fileName += ".csv";
+
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", fileName);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (error) {
+      alert("Failed to export tally records");
+    }
+  };
+
+  const renderTallyTable = () => {
+    if (!tallyData || !tallyData.tallyData) return null;
+    const rows = tallyData.tallyData;
+    if (rows.length === 0) {
+      return (
+        <p className="text-muted text-center py-3">
+          No tally data found for this date range.
+        </p>
+      );
+    }
+
+    if (recordType === "medicineIssuance") {
+      return (
+        <table className="table table-sm table-bordered table-striped">
+          <thead className="table-success">
+            <tr>
+              <th>#</th>
+              <th>Medicine Name</th>
+              <th>Course</th>
+              <th>Total Quantity</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r: any, i: number) => (
+              <tr key={i}>
+                <td>{i + 1}</td>
+                <td>{r.medicineName || "—"}</td>
+                <td>{r.course || "—"}</td>
+                <td className="fw-bold">{r.totalQuantity}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      );
+    }
+
+    if (recordType === "monitoring") {
+      return (
+        <table className="table table-sm table-bordered table-striped">
+          <thead className="table-success">
+            <tr>
+              <th>#</th>
+              <th>Symptoms</th>
+              <th>Visit Count</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r: any, i: number) => (
+              <tr key={i}>
+                <td>{i + 1}</td>
+                <td>{r.symptoms || "—"}</td>
+                <td className="fw-bold">{r.visitCount}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      );
+    }
+
+    if (recordType === "physicalExam") {
+      return (
+        <table className="table table-sm table-bordered table-striped">
+          <thead className="table-success">
+            <tr>
+              <th>#</th>
+              <th>Course</th>
+              <th>Year</th>
+              <th>Gender</th>
+              <th>Student Count</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r: any, i: number) => (
+              <tr key={i}>
+                <td>{i + 1}</td>
+                <td>{r.course || "—"}</td>
+                <td>{r.year || "—"}</td>
+                <td>{r.gender || "—"}</td>
+                <td className="fw-bold">{r.studentCount}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      );
+    }
+
+    if (recordType === "certificate") {
+      return (
+        <table className="table table-sm table-bordered table-striped">
+          <thead className="table-success">
+            <tr>
+              <th>#</th>
+              <th>Diagnosis</th>
+              <th>Remarks</th>
+              <th>Count</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r: any, i: number) => (
+              <tr key={i}>
+                <td>{i + 1}</td>
+                <td>{r.diagnosis || "—"}</td>
+                <td>{r.remarks || "—"}</td>
+                <td className="fw-bold">{r.certificateCount}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      );
+    }
+
+    if (recordType === "laboratoryRequest") {
+      return (
+        <table className="table table-sm table-bordered table-striped">
+          <thead className="table-success">
+            <tr>
+              <th>#</th>
+              <th>Test Name</th>
+              <th>Request Count</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r: any, i: number) => (
+              <tr key={i}>
+                <td>{i + 1}</td>
+                <td>{r.testName}</td>
+                <td className="fw-bold">{r.count}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      );
+    }
+
+    return null;
+  };
+
+  const renderTallyPanel = () => {
+    if (!showTally) return null;
+
+    const activeTallyFilterCount =
+      Object.values(tallyFilters).filter(Boolean).length;
+
     return (
       <div
         className="card mb-3 border-0 shadow-sm"
         style={{
-          background: "linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)",
+          background: "linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)",
         }}
       >
-        <div className="card-body py-3">
-          <div className="row g-2 align-items-end">
-            {/* Status — available for all record types */}
-            <div className="col-md-2">
-              <label className="form-label small fw-semibold mb-1">
-                Status
-              </label>
-              <select
-                className="form-select form-select-sm"
-                value={filters.status || ""}
-                onChange={(e) => handleFilterChange("status", e.target.value)}
-              >
-                <option value="">All</option>
-                <option value="pending">Pending</option>
-                <option value="approved">Approved</option>
-                <option value="rejected">Rejected</option>
-              </select>
+        <div className="card-body">
+          <div className="d-flex justify-content-between align-items-center mb-3">
+            <h6 className="mb-0 fw-bold text-success">
+              <i className="bi bi-bar-chart-line me-2"></i>
+              Tally Summary
+              {tallyData && (
+                <span className="badge bg-success ms-2">
+                  {tallyData.totalCount} total
+                </span>
+              )}
+            </h6>
+            {tallyData && (
+              <small className="text-muted">
+                {tallyData.dateFrom} to {tallyData.dateTo}
+                {activeTallyFilterCount > 0 && (
+                  <span className="badge bg-warning text-dark ms-2">
+                    {activeTallyFilterCount} filter
+                    {activeTallyFilterCount > 1 ? "s" : ""} active
+                  </span>
+                )}
+              </small>
+            )}
+          </div>
+
+          {/* Date Range + Per-Form Filters */}
+          <div className="row g-2 mb-3 align-items-end">
+            <div className="col-auto">
+              <label className="form-label small fw-semibold mb-1">From</label>
+              <input
+                type="date"
+                className="form-control form-control-sm"
+                value={tallyDateFrom}
+                onChange={(e) => setTallyDateFrom(e.target.value)}
+              />
+            </div>
+            <div className="col-auto">
+              <label className="form-label small fw-semibold mb-1">To</label>
+              <input
+                type="date"
+                className="form-control form-control-sm"
+                value={tallyDateTo}
+                onChange={(e) => setTallyDateTo(e.target.value)}
+              />
             </div>
 
-            {/* Course — Physical Exam, Medicine Issuance */}
-            {(recordType === "physicalExam" ||
-              recordType === "medicineIssuance") && (
-              <div className="col-md-2">
+            {/* Physical Exam: course, year, gender */}
+            {recordType === "physicalExam" && (
+              <>
+                <div className="col-auto">
+                  <label className="form-label small fw-semibold mb-1">
+                    Course
+                  </label>
+                  <input
+                    type="text"
+                    className="form-control form-control-sm"
+                    placeholder="e.g. BSIT"
+                    value={tallyFilters.course || ""}
+                    onChange={(e) =>
+                      handleTallyFilterChange("course", e.target.value)
+                    }
+                  />
+                </div>
+                <div className="col-auto">
+                  <label className="form-label small fw-semibold mb-1">
+                    Year
+                  </label>
+                  <select
+                    className="form-select form-select-sm"
+                    value={tallyFilters.year || ""}
+                    onChange={(e) =>
+                      handleTallyFilterChange("year", e.target.value)
+                    }
+                  >
+                    <option value="">All</option>
+                    <option value="1st Year">1st Year</option>
+                    <option value="2nd Year">2nd Year</option>
+                    <option value="3rd Year">3rd Year</option>
+                    <option value="4th Year">4th Year</option>
+                  </select>
+                </div>
+                <div className="col-auto">
+                  <label className="form-label small fw-semibold mb-1">
+                    Gender
+                  </label>
+                  <select
+                    className="form-select form-select-sm"
+                    value={tallyFilters.gender || ""}
+                    onChange={(e) =>
+                      handleTallyFilterChange("gender", e.target.value)
+                    }
+                  >
+                    <option value="">All</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                  </select>
+                </div>
+              </>
+            )}
+
+            {/* Monitoring: symptoms */}
+            {recordType === "monitoring" && (
+              <div className="col-auto">
+                <label className="form-label small fw-semibold mb-1">
+                  Symptoms
+                </label>
+                <input
+                  type="text"
+                  className="form-control form-control-sm"
+                  placeholder="e.g. Headache"
+                  value={tallyFilters.symptoms || ""}
+                  onChange={(e) =>
+                    handleTallyFilterChange("symptoms", e.target.value)
+                  }
+                />
+              </div>
+            )}
+
+            {/* Medicine Issuance: course */}
+            {recordType === "medicineIssuance" && (
+              <div className="col-auto">
                 <label className="form-label small fw-semibold mb-1">
                   Course
                 </label>
@@ -485,123 +791,89 @@ const PatientRecordsView: React.FC<PatientRecordsViewProps> = ({
                   type="text"
                   className="form-control form-control-sm"
                   placeholder="e.g. BSIT"
-                  value={filters.course || ""}
-                  onChange={(e) => handleFilterChange("course", e.target.value)}
+                  value={tallyFilters.course || ""}
+                  onChange={(e) =>
+                    handleTallyFilterChange("course", e.target.value)
+                  }
                 />
               </div>
             )}
 
-            {/* Year — Physical Exam */}
-            {recordType === "physicalExam" && (
-              <div className="col-md-2">
-                <label className="form-label small fw-semibold mb-1">
-                  Year Level
-                </label>
-                <select
-                  className="form-select form-select-sm"
-                  value={filters.year || ""}
-                  onChange={(e) => handleFilterChange("year", e.target.value)}
-                >
-                  <option value="">All</option>
-                  <option value="1st Year">1st Year</option>
-                  <option value="2nd Year">2nd Year</option>
-                  <option value="3rd Year">3rd Year</option>
-                  <option value="4th Year">4th Year</option>
-                </select>
-              </div>
+            {/* Certificate: diagnosis, remarks */}
+            {recordType === "certificate" && (
+              <>
+                <div className="col-auto">
+                  <label className="form-label small fw-semibold mb-1">
+                    Diagnosis
+                  </label>
+                  <input
+                    type="text"
+                    className="form-control form-control-sm"
+                    placeholder="e.g. Fever"
+                    value={tallyFilters.diagnosis || ""}
+                    onChange={(e) =>
+                      handleTallyFilterChange("diagnosis", e.target.value)
+                    }
+                  />
+                </div>
+                <div className="col-auto">
+                  <label className="form-label small fw-semibold mb-1">
+                    Remarks
+                  </label>
+                  <input
+                    type="text"
+                    className="form-control form-control-sm"
+                    placeholder="e.g. Rest advised"
+                    value={tallyFilters.remarks || ""}
+                    onChange={(e) =>
+                      handleTallyFilterChange("remarks", e.target.value)
+                    }
+                  />
+                </div>
+              </>
             )}
 
-            {/* Gender — Physical Exam */}
-            {recordType === "physicalExam" && (
-              <div className="col-md-2">
-                <label className="form-label small fw-semibold mb-1">
-                  Gender
-                </label>
-                <select
-                  className="form-select form-select-sm"
-                  value={filters.gender || ""}
-                  onChange={(e) => handleFilterChange("gender", e.target.value)}
-                >
-                  <option value="">All</option>
-                  <option value="Male">Male</option>
-                  <option value="Female">Female</option>
-                </select>
-              </div>
-            )}
+            {/* Laboratory Request: no extra filters (boolean tests only) */}
 
-            {/* Sex — Monitoring, Certificate */}
-            {(recordType === "monitoring" || recordType === "certificate") && (
-              <div className="col-md-2">
-                <label className="form-label small fw-semibold mb-1">Sex</label>
-                <select
-                  className="form-select form-select-sm"
-                  value={filters.sex || ""}
-                  onChange={(e) => handleFilterChange("sex", e.target.value)}
-                >
-                  <option value="">All</option>
-                  <option value="Male">Male</option>
-                  <option value="Female">Female</option>
-                </select>
-              </div>
-            )}
-
-            {/* Degree — Monitoring */}
-            {recordType === "monitoring" && (
-              <div className="col-md-2">
-                <label className="form-label small fw-semibold mb-1">
-                  Degree
-                </label>
-                <input
-                  type="text"
-                  className="form-control form-control-sm"
-                  placeholder="e.g. BSIT"
-                  value={filters.degree || ""}
-                  onChange={(e) => handleFilterChange("degree", e.target.value)}
-                />
-              </div>
-            )}
-
-            {/* Date Range — all types */}
-            <div className="col-md-2">
-              <label className="form-label small fw-semibold mb-1">
-                Date From
-              </label>
-              <input
-                type="date"
-                className="form-control form-control-sm"
-                value={filters.dateFrom || ""}
-                onChange={(e) => handleFilterChange("dateFrom", e.target.value)}
-              />
-            </div>
-            <div className="col-md-2">
-              <label className="form-label small fw-semibold mb-1">
-                Date To
-              </label>
-              <input
-                type="date"
-                className="form-control form-control-sm"
-                value={filters.dateTo || ""}
-                onChange={(e) => handleFilterChange("dateTo", e.target.value)}
-              />
-            </div>
-
-            {/* Apply / Clear buttons */}
-            <div className="col-md-auto d-flex gap-2 align-items-end">
+            <div className="col-auto d-flex gap-2">
               <button
                 className="btn btn-success btn-sm px-3"
-                onClick={applyFilters}
+                onClick={applyTallyDateRange}
               >
                 <i className="bi bi-funnel-fill me-1"></i>Apply
               </button>
               <button
                 className="btn btn-outline-secondary btn-sm px-3"
-                onClick={clearFilters}
-                disabled={activeFilterCount === 0}
+                onClick={clearTallyDateRange}
               >
-                <i className="bi bi-x-circle me-1"></i>Clear
+                <i className="bi bi-x-circle me-1"></i>Reset
               </button>
+              {tallyData &&
+                tallyData.tallyData &&
+                tallyData.tallyData.length > 0 && (
+                  <button
+                    className="btn btn-outline-primary btn-sm px-3"
+                    onClick={handleTallyExportCSV}
+                  >
+                    <i className="bi bi-download me-1"></i>Export CSV
+                  </button>
+                )}
             </div>
           </div>
+
+          {tallyLoading ? (
+            <div className="text-center py-3">
+              <div className="spinner-border spinner-border-sm text-success"></div>
+              <span className="ms-2 text-muted">Loading tally...</span>
+            </div>
+          ) : (
+            <div
+              className="table-responsive"
+              style={{ maxHeight: "400px", overflowY: "auto" }}
+            >
+              {renderTallyTable()}
+            </div>
+          )}
         </div>
       </div>
     );
@@ -626,17 +898,12 @@ const PatientRecordsView: React.FC<PatientRecordsViewProps> = ({
             <i className="bi bi-search"></i> Search
           </button>
           <button
-            className={`btn btn-sm px-3 ${showFilters ? "btn-warning" : "btn-outline-secondary"}`}
-            onClick={() => setShowFilters(!showFilters)}
-            title="Toggle filters"
+            className={`btn btn-sm px-3 ${showTally ? "btn-success" : "btn-outline-success"}`}
+            onClick={handleTallyToggle}
+            title="Toggle tally summary"
           >
-            <i className="bi bi-funnel me-1"></i>
-            Filters
-            {activeFilterCount > 0 && (
-              <span className="badge bg-danger ms-1 rounded-pill">
-                {activeFilterCount}
-              </span>
-            )}
+            <i className="bi bi-bar-chart-line me-1"></i>
+            Tally
           </button>
         </div>
 
@@ -656,7 +923,7 @@ const PatientRecordsView: React.FC<PatientRecordsViewProps> = ({
         </div>
       </div>
 
-      {showFilters && renderFilterBar()}
+      {renderTallyPanel()}
 
       {loading ? (
         <div className="text-center py-5">

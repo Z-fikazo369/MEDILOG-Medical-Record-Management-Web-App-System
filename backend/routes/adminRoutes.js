@@ -8,6 +8,8 @@ import {
   getBackupList,
   downloadBackup,
   restoreSystem,
+  getActivityLogs,
+  getStaffActivitySummary,
 } from "../controllers/adminController.js";
 
 const router = express.Router();
@@ -26,5 +28,16 @@ router.get("/backup/download/:filename", protect, isAdmin, downloadBackup);
 
 // 4. RESTORE SYSTEM (Disabled): POST /api/users/backup/restore
 router.post("/backup/restore", protect, isAdmin, restoreSystem);
+
+// 5. ACTIVITY LOGS: GET /api/users/activity-logs
+router.get("/activity-logs", protect, isAdmin, getActivityLogs);
+
+// 6. STAFF ACTIVITY SUMMARY: GET /api/users/activity-logs/staff-summary
+router.get(
+  "/activity-logs/staff-summary",
+  protect,
+  isAdmin,
+  getStaffActivitySummary,
+);
 
 export default router;

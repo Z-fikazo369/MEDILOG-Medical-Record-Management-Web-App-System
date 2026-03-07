@@ -254,7 +254,7 @@ const StudentDashboard: React.FC = () => {
     }
   };
 
-  const fetchStudentData = async (isSilent = false) => {
+  const fetchStudentData = async (_isSilent = false) => {
     try {
       if (!user?._id) return;
       const [unreadRes, notifsRes] = await Promise.all([
@@ -482,9 +482,7 @@ const StudentDashboard: React.FC = () => {
         />
 
         {/* --- Main Container --- */}
-        <div
-          className={`flex-grow-1 d-flex flex-column ${sidebarCollapsed ? "sidebar-collapsed-margin" : ""}`}
-        >
+        <div className={`flex-grow-1 d-flex flex-column`}>
           {/* Header */}
           <header className="main-header d-flex justify-content-between align-items-center">
             <div className="d-flex align-items-center gap-3">
@@ -497,18 +495,43 @@ const StudentDashboard: React.FC = () => {
                 <i className="bi bi-list" style={{ fontSize: "1.3rem" }}></i>
               </button>
               <div className="header-greeting">
-                {activeView === "landing" ? (
-                  <>
-                    <h2>Hello, {user?.username.split(" ")[0]}! 👋</h2>
-                    <p className="mb-0">
-                      Welcome to your student health portal.
-                    </p>
-                  </>
-                ) : null}
+                <h5
+                  className="mb-0"
+                  style={{
+                    color: "var(--primary-green)",
+                    fontWeight: 700,
+                    fontSize: "1.4rem",
+                    letterSpacing: "0.3px",
+                  }}
+                >
+                  Student Portal
+                </h5>
               </div>
             </div>
 
             <div className="user-info d-flex align-items-center gap-3">
+              {activeView === "landing" && (
+                <div style={{ textAlign: "right" }}>
+                  <span
+                    style={{
+                      fontWeight: 600,
+                      fontSize: "0.95rem",
+                      color: "var(--text-dark)",
+                    }}
+                  >
+                    Hello, {user?.username.split(" ")[0]}! 👋
+                  </span>
+                  <p
+                    className="mb-0"
+                    style={{
+                      fontSize: "0.78rem",
+                      color: "var(--text-muted)",
+                    }}
+                  >
+                    Welcome to your student health portal.
+                  </p>
+                </div>
+              )}
               <div
                 className="position-relative profile-picture-container"
                 onClick={() => setActiveView("profile")}

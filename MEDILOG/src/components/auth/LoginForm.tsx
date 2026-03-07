@@ -294,7 +294,9 @@ const LoginForm: React.FC = () => {
 
           <div className="auth-footer">
             <p className="mb-2">
-              <Link to="/forgot-password">Forgot Password?</Link>
+              <Link to="/forgot-password" state={{ loginRole: role }}>
+                Forgot Password?
+              </Link>
             </p>
 
             <div>

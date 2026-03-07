@@ -208,128 +208,17 @@ export const PredictiveAnalytics: React.FC<PredictiveAnalyticsProps> = ({
         border: "1px solid rgba(99, 102, 241, 0.15)",
       }}
     >
-      {/* Header */}
-      <div className="d-flex justify-content-between align-items-center mb-3">
-        <div className="d-flex align-items-center gap-3">
-          <div
-            className="d-flex align-items-center justify-content-center rounded-3"
-            style={{
-              width: 42,
-              height: 42,
-              background: "#4f46e5",
-              color: "white",
-            }}
-          >
-            <i className="bi bi-cpu-fill fs-5"></i>
-          </div>
-          <div>
-            <h5 className="fw-bold mb-0">Predictive Analytics</h5>
-            <small className="text-muted">
-              Machine learning forecasts and risk predictions
-            </small>
-          </div>
-        </div>
-        <div className="d-flex align-items-center gap-2">
-          <span
-            className="badge rounded-pill d-flex align-items-center gap-1"
-            style={{
-              background: isCatBoost
-                ? "rgba(16, 185, 129, 0.1)"
-                : "rgba(245, 158, 11, 0.1)",
-              color: isCatBoost ? "#059669" : "#d97706",
-              fontWeight: 700,
-              fontSize: "0.65rem",
-            }}
-          >
-            <i
-              className={`bi ${isCatBoost ? "bi-check-circle-fill" : "bi-exclamation-triangle-fill"}`}
-            ></i>
-            {isCatBoost
-              ? `CatBoost Active (${modelsActive} models)`
-              : "Statistical Fallback"}
-          </span>
-          <span
-            className="badge rounded-pill d-flex align-items-center gap-1"
-            style={{
-              background: "rgba(139, 92, 246, 0.1)",
-              color: "#7c3aed",
-              fontWeight: 700,
-              fontSize: "0.7rem",
-            }}
-          >
-            ✨ AI Powered
-          </span>
-        </div>
-      </div>
-
-      {/* Algorithm & Accuracy Banner */}
-      <div
-        className="d-flex align-items-center justify-content-between p-3 rounded-3 mb-4"
-        style={{
-          background: isCatBoost
-            ? "linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)"
-            : "linear-gradient(135deg, #d97706 0%, #b45309 100%)",
-          color: "white",
-        }}
-      >
-        <div className="d-flex align-items-center gap-3">
-          <div
-            className="d-flex align-items-center justify-content-center rounded-2"
-            style={{
-              width: 36,
-              height: 36,
-              background: "rgba(255,255,255,0.2)",
-            }}
-          >
-            <i
-              className={`bi ${isCatBoost ? "bi-braces-asterisk" : "bi-graph-up"} fs-6`}
-            ></i>
-          </div>
-          <div>
-            <div className="fw-bold" style={{ fontSize: "0.95rem" }}>
-              {isCatBoost ? "CatBoost Algorithm" : "Statistical Analysis"}
-            </div>
-            <div style={{ fontSize: "0.7rem", opacity: 0.85 }}>
-              {isCatBoost
-                ? "Gradient Boosting Decision Trees \u2014 Trained on system data"
-                : "Linear regression + heuristics \u2014 Install CatBoost for ML"}
-            </div>
-          </div>
-        </div>
-        <div className="text-end">
-          <div
-            style={{
-              fontSize: "0.65rem",
-              opacity: 0.8,
-              textTransform: "uppercase",
-              letterSpacing: "0.05em",
-            }}
-          >
-            Model Accuracy
-          </div>
-          <div
-            className="fw-bold"
-            style={{ fontSize: "1.6rem", lineHeight: 1 }}
-          >
-            {data.mlMetrics.accuracy}%
-          </div>
-        </div>
-      </div>
-
-      {/* ML Metrics Row */}
-      <div className="row g-3 mb-4">
-        {metrics.map((m, idx) => (
-          <div key={idx} className="col-6 col-md">
-            <MLMetricCard title={m.title} value={m.value} width={m.width} />
-          </div>
-        ))}
-      </div>
-
       {/* Forecast + Risk Radar */}
       <div className="row g-3 mb-4">
         {/* Patient Visit Forecast */}
         <div className="col-12 col-lg-6">
-          <div className="card border-0 shadow-sm h-100">
+          <div
+            className="card shadow-sm h-100"
+            style={{
+              border: "1px solid #e5e7eb",
+              borderLeft: "4px solid #8b5cf6",
+            }}
+          >
             <div className="card-body">
               <div className="d-flex justify-content-between align-items-start mb-3">
                 <div className="d-flex align-items-center gap-2">
@@ -464,6 +353,22 @@ export const PredictiveAnalytics: React.FC<PredictiveAnalyticsProps> = ({
               </div>
 
               <div
+                className="mt-2 p-2 rounded-2"
+                style={{
+                  background: "#f8fafc",
+                  border: "1px solid #e2e8f0",
+                  fontSize: "0.72rem",
+                  color: "#64748b",
+                }}
+              >
+                <i className="bi bi-exclamation-triangle me-1"></i>
+                Forecasts future patient visit volumes by analyzing historical
+                visit patterns, seasonal trends, and clinic activity data to
+                predict how many patients are expected per month — helping staff
+                prepare resources ahead of time.
+              </div>
+
+              <div
                 className="mt-3 p-2 rounded-2"
                 style={{
                   background: "rgba(139, 92, 246, 0.06)",
@@ -482,7 +387,13 @@ export const PredictiveAnalytics: React.FC<PredictiveAnalyticsProps> = ({
 
         {/* Disease Risk Predictions */}
         <div className="col-12 col-lg-6">
-          <div className="card border-0 shadow-sm h-100">
+          <div
+            className="card shadow-sm h-100"
+            style={{
+              border: "1px solid #e5e7eb",
+              borderLeft: "4px solid #10b981",
+            }}
+          >
             <div className="card-body">
               <div className="d-flex justify-content-between align-items-start mb-2">
                 <div className="d-flex align-items-center gap-2">
@@ -573,6 +484,22 @@ export const PredictiveAnalytics: React.FC<PredictiveAnalyticsProps> = ({
                 </span>
               </div>
 
+              <div
+                className="p-2 rounded-2 mb-2"
+                style={{
+                  background: "#f8fafc",
+                  border: "1px solid #e2e8f0",
+                  fontSize: "0.72rem",
+                  color: "#64748b",
+                }}
+              >
+                <i className="bi bi-exclamation-triangle me-1"></i>
+                Assesses disease risk levels across multiple categories by
+                evaluating aggregated student health records, consultation
+                frequency, and diagnosed conditions to calculate a risk score
+                per disease — enabling early intervention for high-risk areas.
+              </div>
+
               <div className="row g-2 mt-1" style={{ fontSize: "0.75rem" }}>
                 {data.riskRadar.map((item, idx) => (
                   <div key={idx} className="col-6">
@@ -600,7 +527,13 @@ export const PredictiveAnalytics: React.FC<PredictiveAnalyticsProps> = ({
       <div className="row g-3">
         {/* Medicine Stock Depletion Forecast */}
         <div className="col-12 col-lg-6">
-          <div className="card border-0 shadow-sm h-100">
+          <div
+            className="card shadow-sm h-100"
+            style={{
+              border: "1px solid #e5e7eb",
+              borderLeft: "4px solid #f97316",
+            }}
+          >
             <div className="card-body">
               <div className="d-flex align-items-center gap-2 mb-3">
                 <span
@@ -631,6 +564,22 @@ export const PredictiveAnalytics: React.FC<PredictiveAnalyticsProps> = ({
                 >
                   CatBoost
                 </span>
+              </div>
+
+              <div
+                className="p-2 rounded-2 mb-3"
+                style={{
+                  background: "#f8fafc",
+                  border: "1px solid #e2e8f0",
+                  fontSize: "0.72rem",
+                  color: "#64748b",
+                }}
+              >
+                <i className="bi bi-exclamation-triangle me-1"></i>
+                Predicts when pharmacy medicines will run out by tracking daily
+                consumption rates, dispensing history, and current stock levels
+                to estimate remaining stock life for each item — so the clinic
+                can reorder before supplies are depleted.
               </div>
 
               {data.stockForecasts.length > 0 ? (
@@ -664,7 +613,13 @@ export const PredictiveAnalytics: React.FC<PredictiveAnalyticsProps> = ({
 
         {/* Student Health Risk Distribution */}
         <div className="col-12 col-lg-6">
-          <div className="card border-0 shadow-sm h-100">
+          <div
+            className="card shadow-sm h-100"
+            style={{
+              border: "1px solid #e5e7eb",
+              borderLeft: "4px solid #3b82f6",
+            }}
+          >
             <div className="card-body d-flex flex-column justify-content-between">
               <div>
                 <div className="d-flex align-items-center gap-2 mb-3">
@@ -696,6 +651,22 @@ export const PredictiveAnalytics: React.FC<PredictiveAnalyticsProps> = ({
                   >
                     CatBoost
                   </span>
+                </div>
+
+                <div
+                  className="p-2 rounded-2 mb-3"
+                  style={{
+                    background: "#f8fafc",
+                    border: "1px solid #e2e8f0",
+                    fontSize: "0.72rem",
+                    color: "#64748b",
+                  }}
+                >
+                  <i className="bi bi-exclamation-triangle me-1"></i>
+                  Categorizes students into health risk tiers by analyzing each
+                  student's visit frequency, diagnosed conditions, and medical
+                  history to assign a risk level — helping the clinic prioritize
+                  follow-ups for at-risk students.
                 </div>
 
                 <div style={{ height: 180 }}>

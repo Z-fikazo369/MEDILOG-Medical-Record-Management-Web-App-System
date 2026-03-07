@@ -1,24 +1,17 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import "../styles/LandingPage.css";
+import campusBg from "../assets/97122 (1).png";
 
 const LandingPage: React.FC = () => {
   const navigate = useNavigate();
-
-  // ✅ ADD THIS STATE: Para ma-track kung nag-scroll na
   const [isScrolled, setIsScrolled] = useState(false);
+  const [showAboutUs, setShowAboutUs] = useState(false);
 
-  // ✅ ADD THIS EFFECT: Event listener sa scroll
   useEffect(() => {
     const handleScroll = () => {
-      // Kapag bumaba ng lampas 50px, magiging "scrolled" na siya
-      if (window.scrollY > 50) {
-        setIsScrolled(true);
-      } else {
-        setIsScrolled(false);
-      }
+      setIsScrolled(window.scrollY > 50);
     };
-
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
@@ -26,16 +19,20 @@ const LandingPage: React.FC = () => {
   const scrollToSection = (id: string) => {
     const element = document.getElementById(id);
     if (element) {
-      element.scrollIntoView({ behavior: "smooth" });
+      element.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   };
 
   return (
     <div className="landing-container">
       {/* --- NAVBAR --- */}
-      {/* ✅ UPDATED: Dinagdag ang logic sa className */}
       <nav className={`landing-nav ${isScrolled ? "scrolled" : ""}`}>
         <div className="nav-brand">
+          <img
+            src="/assets/isu-logo-300x300.png"
+            alt="ISU Logo"
+            className="nav-logo-img"
+          />
           <img
             src="/medilog-icon.svg"
             alt="Medilog Logo"
@@ -58,14 +55,20 @@ const LandingPage: React.FC = () => {
             Features
           </button>
           <button
-            onClick={() => scrollToSection("programmers")}
+            onClick={() => scrollToSection("how-it-works")}
             className="nav-link-item"
           >
-            The Team
+            How It Works
+          </button>
+          <button
+            onClick={() => setShowAboutUs(true)}
+            className="nav-link-item"
+          >
+            About Us
           </button>
         </div>
 
-        <div className="nav-actions d-flex align-items-center gap-3">
+        <div className="nav-actions">
           <button
             className="btn-login-nav"
             onClick={() => navigate("/login/student")}
@@ -77,256 +80,394 @@ const LandingPage: React.FC = () => {
 
       {/* --- HERO SECTION --- */}
       <section id="hero" className="hero-section">
-        <div className="hero-background-elements">
-          <div className="hero-pattern-grid"></div>
-          <div className="floating-shape shape-circle-1"></div>
-          <div className="floating-shape shape-dots-1"></div>
+        <img
+          src={campusBg}
+          alt="Isabela State University Campus"
+          className="hero-bg-img"
+        />
+        <div className="hero-overlay"></div>
+        <div className="hero-content-wrapper">
+          <div className="hero-text-block">
+            <span className="hero-badge">Campus Health Solutions</span>
+            <h1 className="hero-headline">Securing Health on Campus.</h1>
+            <p className="hero-subtext">
+              A streamlined Medical Service Management System designed to
+              empower campus infirmaries with accurate records, smart inventory,
+              and seamless operations.
+            </p>
+            <div className="hero-buttons">
+              <button
+                className="btn-primary-action"
+                onClick={() => navigate("/signup")}
+              >
+                Get Started
+              </button>
+              <button
+                className="btn-secondary-action"
+                onClick={() => scrollToSection("features")}
+              >
+                Explore Features
+              </button>
+            </div>
+          </div>
         </div>
+      </section>
 
-        <div className="hero-content pe-lg-5 position-relative z-2">
-          <span className="hero-badge">ISU CAMPUS INFIRMARY</span>
-          <h1 className="hero-headline">MEDILOG</h1>
-          <h2 className="hero-subtitle-large">
-            A Medical Service Management System
-          </h2>
-          <p className="hero-subtext">
-            Designed to streamline operations for campus infirmaries and
-            healthcare units with modern technology.
+      {/* --- CORE FEATURES SECTION --- */}
+      <section id="features" className="features-section">
+        <div className="section-header text-center">
+          <h2 className="section-title">Platform Features</h2>
+          <p className="section-subtitle">
+            Powerful tools for students and medical staff — all in one secure
+            platform.
           </p>
-          <div className="hero-buttons">
-            <button
-              className="btn-get-started"
-              onClick={() => navigate("/signup")}
-            >
-              Get Started Now <i className="bi bi-arrow-right"></i>
-            </button>
-            <button
-              className="btn-learn-more"
-              onClick={() => scrollToSection("features")}
-            >
-              Learn More
-            </button>
-          </div>
         </div>
 
-        {/* --- HERO VISUAL CONTAINER (3D ORBIT INTERACTION) --- */}
-        <div className="hero-visual-container position-relative z-2">
-          {/* Center Logo (The Sun) */}
-          <div className="orbit-center-logo">
-            <img
-              src="/medilog-icon.svg"
-              alt="Medilog Official Logo"
-              className="hero-logo-main"
-            />
-            <div className="logo-glow"></div>
+        <div className="features-grid container">
+          <div className="feature-card">
+            <div className="feature-icon-box">
+              <i className="bi bi-file-earmark-medical"></i>
+            </div>
+            <h3>Online Medical Forms</h3>
+            <p>
+              Students can submit physical exam requests, medical certificates,
+              lab requests, and monitoring records directly from their
+              dashboard.
+            </p>
           </div>
 
-          {/* Orbit 1: Medicine Capsule */}
-          <div className="orbit-ring ring-1">
-            <div className="orbit-item item-1">
+          <div className="feature-card">
+            <div className="feature-icon-box">
+              <i className="bi bi-bell"></i>
+            </div>
+            <h3>Real-Time Notifications</h3>
+            <p>
+              Get instant alerts when your records are submitted, reviewed,
+              approved, or if any action is needed — no more guessing.
+            </p>
+          </div>
+
+          <div className="feature-card">
+            <div className="feature-icon-box">
+              <i className="bi bi-shield-lock"></i>
+            </div>
+            <h3>Secure Health Records</h3>
+            <p>
+              All patient data is encrypted and access-controlled. Only
+              authorized medical staff can view and manage sensitive records.
+            </p>
+          </div>
+
+          <div className="feature-card">
+            <div className="feature-icon-box">
               <i className="bi bi-capsule"></i>
             </div>
-          </div>
-
-          {/* Orbit 2: Heart Pulse */}
-          <div className="orbit-ring ring-2">
-            <div className="orbit-item item-2">
-              <i className="bi bi-heart-pulse-fill"></i>
-            </div>
-          </div>
-
-          {/* Orbit 3: Secure Shield */}
-          <div className="orbit-ring ring-3">
-            <div className="orbit-item item-3">
-              <i className="bi bi-shield-lock-fill"></i>
-            </div>
-          </div>
-
-          {/* Decorative Floating Particles */}
-          <div className="floating-particle p1"></div>
-          <div className="floating-particle p2"></div>
-          <div className="floating-particle p3"></div>
-        </div>
-      </section>
-
-      {/* --- ✅ CORE FEATURES SECTION (HORIZONTAL GRID) --- */}
-      <section id="features" className="features-section">
-        <div className="container">
-          <div className="section-header">
-            <h2 className="section-title">Core Features of MEDILOG</h2>
-            <p className="section-subtitle text-muted">
-              Powerful tools integrated into one seamless platform for efficient
-              infirmary management.
+            <h3>Pharmacy & Inventory</h3>
+            <p>
+              Staff can track medicine stock levels, expiration dates, and
+              issuance history. Students see what medicines are available.
             </p>
-            <div className="title-underline"></div>
           </div>
 
-          <div className="features-grid">
-            {/* Feature 1 */}
-            <div className="feature-card">
-              <div className="feature-icon-wrapper icon-green mb-3">
-                <i className="bi bi-folder2-open"></i>
-              </div>
-              <h3>Patient Records Management</h3>
-              <p>
-                Secure digital health records with easy search and update
-                capabilities.
-              </p>
+          <div className="feature-card">
+            <div className="feature-icon-box">
+              <i className="bi bi-robot"></i>
             </div>
+            <h3>AI-Powered Insights</h3>
+            <p>
+              Built-in AI assistant helps staff with medical summaries,
+              transcription, and predictive analytics for smarter decisions.
+            </p>
+          </div>
 
-            {/* Feature 2 */}
-            <div className="feature-card">
-              <div className="feature-icon-wrapper icon-blue mb-3">
-                <i className="bi bi-clipboard-pulse"></i>
-              </div>
-              <h3>Medical Transaction Logging</h3>
-              <p>
-                Tracks consultations, treatments, and medicines history
-                automatically.
-              </p>
+          <div className="feature-card">
+            <div className="feature-icon-box">
+              <i className="bi bi-download"></i>
             </div>
-
-            {/* Feature 3 */}
-            <div className="feature-card">
-              <div className="feature-icon-wrapper icon-purple mb-3">
-                <i className="bi bi-capsule"></i>
-              </div>
-              <h3>Inventory & Medicine Tracking</h3>
-              <p>
-                Monitor stock levels and expiration dates to prevent shortages.
-              </p>
-            </div>
-
-            {/* Feature 4 */}
-            <div className="feature-card">
-              <div className="feature-icon-wrapper icon-orange mb-3">
-                <i className="bi bi-bar-chart-line"></i>
-              </div>
-              <h3>Reports & Analytics</h3>
-              <p>
-                Generate daily/monthly summaries and exportable PDF/Excel
-                reports.
-              </p>
-            </div>
+            <h3>Export & Reports</h3>
+            <p>
+              Generate and download CSV or Excel reports for records, tallying,
+              and analytics — ready for compliance and institutional use.
+            </p>
           </div>
         </div>
       </section>
 
-      {/* --- DESIGNED FOR & BENEFITS SECTION --- */}
-      <section id="benefits" className="designed-for-section">
-        <div className="row align-items-center w-100 mx-0">
-          <div className="col-lg-6 mb-4 mb-lg-0">
-            <h2 className="section-title text-start mb-4">Designed For</h2>
-            <div className="target-audience-list">
-              <div className="audience-item">
-                <i className="bi bi-hospital-fill text-success fs-4 me-3"></i>
-                <span className="fs-5 fw-bold">Campus Infirmaries</span>
-              </div>
-              <div className="audience-item">
-                <i className="bi bi-person-hearts text-danger fs-4 me-3"></i>
-                <span className="fs-5 fw-bold">Nurses & Medical Staff</span>
-              </div>
-              <div className="audience-item">
-                <i className="bi bi-mortarboard-fill text-primary fs-4 me-3"></i>
-                <span className="fs-5 fw-bold">Educational Institutions</span>
-              </div>
+      {/* --- HOW IT WORKS SECTION --- */}
+      <section id="how-it-works" className="how-it-works-section">
+        <div className="section-header text-center">
+          <h2 className="section-title">How It Works</h2>
+          <p className="section-subtitle">
+            Getting started with Medilog is simple. Here's your journey as a
+            student.
+          </p>
+        </div>
+
+        <div className="steps-container container">
+          <div className="step-card">
+            <div className="step-number">1</div>
+            <div className="step-icon">
+              <i className="bi bi-person-plus"></i>
             </div>
+            <h3>Create Your Account</h3>
+            <p>
+              Sign up with your university email and complete your student
+              profile in minutes.
+            </p>
           </div>
 
-          <div className="col-lg-6">
-            <div className="benefits-card">
-              <h3 className="mb-4">Key Benefits</h3>
-              <ul className="benefits-list">
+          <div className="step-connector">
+            <i className="bi bi-arrow-right"></i>
+          </div>
+
+          <div className="step-card">
+            <div className="step-number">2</div>
+            <div className="step-icon">
+              <i className="bi bi-file-earmark-medical"></i>
+            </div>
+            <h3>Submit Medical Forms</h3>
+            <p>
+              Request physical exams, medical certificates, lab tests, or
+              monitoring records online.
+            </p>
+          </div>
+
+          <div className="step-connector">
+            <i className="bi bi-arrow-right"></i>
+          </div>
+
+          <div className="step-card">
+            <div className="step-number">3</div>
+            <div className="step-icon">
+              <i className="bi bi-bell"></i>
+            </div>
+            <h3>Get Notified</h3>
+            <p>
+              Receive real-time updates when your records are reviewed and
+              approved by the clinic.
+            </p>
+          </div>
+
+          <div className="step-connector">
+            <i className="bi bi-arrow-right"></i>
+          </div>
+
+          <div className="step-card">
+            <div className="step-number">4</div>
+            <div className="step-icon">
+              <i className="bi bi-download"></i>
+            </div>
+            <h3>Access Your Records</h3>
+            <p>
+              View, download, or print your approved medical documents anytime
+              from your dashboard.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* --- BENEFITS SECTION --- */}
+      <section id="benefits" className="benefits-section">
+        <div className="container">
+          <div className="benefits-wrapper row align-items-center">
+            <div className="col-lg-6">
+              <h2 className="section-title text-start">
+                Built for the modern educational institution.
+              </h2>
+              <p className="benefits-lead">
+                Medilog bridges the gap between traditional healthcare and
+                modern digital efficiency, specifically tailored for university
+                environments.
+              </p>
+
+              <ul className="benefits-checklist">
                 <li>
-                  <i className="bi bi-stopwatch-fill me-2 text-warning"></i>{" "}
-                  Faster medical transactions
+                  <i className="bi bi-check-circle-fill"></i> Streamlines
+                  high-volume clinic visits
                 </li>
                 <li>
-                  <i className="bi bi-shield-lock-fill me-2 text-success"></i>{" "}
-                  Secure and organized records
+                  <i className="bi bi-check-circle-fill"></i> Reduces
+                  administrative workload for nurses
                 </li>
                 <li>
-                  <i className="bi bi-graph-up-arrow me-2 text-info"></i> Better
-                  decision-making with reports
+                  <i className="bi bi-check-circle-fill"></i> Ensures data
+                  privacy compliance
                 </li>
                 <li>
-                  <i className="bi bi-box-seam-fill me-2 text-primary"></i> No
-                  more surprise out-of-stock medicines
-                </li>
-                <li>
-                  <i className="bi bi-emoji-smile-fill me-2 text-purple"></i>{" "}
-                  Reduced staff workload
+                  <i className="bi bi-check-circle-fill"></i> Prevents medicine
+                  stock-outs
                 </li>
               </ul>
             </div>
+
+            <div className="col-lg-6 mt-5 mt-lg-0">
+              <div className="audience-cards">
+                <div className="audience-card">
+                  <i className="bi bi-hospital text-success"></i>
+                  <h4>Campus Infirmaries</h4>
+                </div>
+                <div className="audience-card mt-4 ms-lg-4">
+                  <i className="bi bi-person-badge text-primary"></i>
+                  <h4>Medical Staff</h4>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* --- PROGRAMMERS SECTION --- */}
-      <section id="programmers" className="programmers-section">
-        <div className="section-header">
-          <h2 className="section-title">About the Programmers</h2>
-          <div className="title-underline"></div>
+      {/* --- ABOUT US OVERLAY --- */}
+      {showAboutUs && (
+        <div className="aboutus-overlay" onClick={() => setShowAboutUs(false)}>
+          <div
+            className="aboutus-showcase"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              className="aboutus-close"
+              onClick={() => setShowAboutUs(false)}
+            >
+              <i className="bi bi-x-lg"></i>
+            </button>
+
+            <div className="aboutus-header">
+              <span className="aboutus-badge">Meet the Team</span>
+              <h2>The Minds Behind Medilog</h2>
+              <p>
+                A group of passionate student developers from Isabela State
+                University, dedicated to improving campus healthcare through
+                technology.
+              </p>
+            </div>
+
+            <div className="aboutus-team-grid">
+              <div className="aboutus-team-card">
+                <img
+                  src="/assets/joyce.jpg"
+                  alt="Ma. Richlyn Joyce Santos"
+                  className="aboutus-avatar-img"
+                />
+                <h4>Ma. Richlyn Joyce Santos</h4>
+                <span className="aboutus-role">Front-end / UI/UX</span>
+                <a
+                  href="mailto:marichlynjoyce.c.santos@isu.edu.ph"
+                  className="aboutus-email"
+                >
+                  <i className="bi bi-envelope"></i>
+                  marichlynjoyce.c.santos@isu.edu.ph
+                </a>
+              </div>
+
+              <div className="aboutus-team-card lead">
+                <div className="aboutus-lead-badge">LEAD</div>
+                <img
+                  src="/assets/zyril.jpg"
+                  alt="Zyril Anne Villanueva"
+                  className="aboutus-avatar-img"
+                />
+                <h4>Zyril Anne Villanueva</h4>
+                <span className="aboutus-role highlight">
+                  Lead Programmer | Full Stack
+                </span>
+                <a
+                  href="mailto:zyrilanne.c.villanueva@isu.edu.ph"
+                  className="aboutus-email"
+                >
+                  <i className="bi bi-envelope"></i>
+                  zyrilanne.c.villanueva@isu.edu.ph
+                </a>
+              </div>
+
+              <div className="aboutus-team-card">
+                <img
+                  src="/assets/lady.jpg"
+                  alt="Lady Christaine Iñigo"
+                  className="aboutus-avatar-img"
+                />
+                <h4>Lady Christaine Iñigo</h4>
+                <span className="aboutus-role">Front-end / UI/UX</span>
+                <a
+                  href="mailto:ladychristaine.g.inigo@isu.edu.ph"
+                  className="aboutus-email"
+                >
+                  <i className="bi bi-envelope"></i>
+                  ladychristaine.g.inigo@isu.edu.ph
+                </a>
+              </div>
+            </div>
+
+            <div className="aboutus-footer-note">
+              <i className="bi bi-building"></i>
+              Isabela State University — College of Computing Studies,
+              Information and Communication Technology
+            </div>
+          </div>
         </div>
-
-        <div className="programmers-grid">
-          <div className="programmer-card">
-            <div className="p-avatar">
-              <i className="bi bi-person-circle"></i>
-            </div>
-            <h3 className="p-name">Ma. Richlyn Joyce C. Santos</h3>
-            <span className="p-role">Front-end Developer | UI/UX Design</span>
-            <div className="p-contact">
-              <p>
-                <i className="bi bi-envelope-fill"></i>{" "}
-                marichlynjoyce.c.santos@isu.edu.ph
-              </p>
-              <p>
-                <i className="bi bi-telephone-fill"></i> 09553273478
-              </p>
-            </div>
-          </div>
-
-          <div className="programmer-card">
-            <div className="p-avatar">
-              <i className="bi bi-person-circle"></i>
-            </div>
-            <h3 className="p-name">Lady Christaine G. Iñigo</h3>
-            <span className="p-role">Front-end Developer | UI/UX Design</span>
-            <div className="p-contact">
-              <p>
-                <i className="bi bi-envelope-fill"></i>{" "}
-                ladychristaine.g.inigo@isu.edu.ph
-              </p>
-              <p>
-                <i className="bi bi-telephone-fill"></i> 09853080160
-              </p>
-            </div>
-          </div>
-
-          <div className="programmer-card highlight-card">
-            <div className="p-avatar">
-              <i className="bi bi-person-fill-gear"></i>
-            </div>
-            <h3 className="p-name">Zyril Anne C. Villanueva</h3>
-            <span className="p-role">Lead Programmer | Full Stack | UI/UX</span>
-            <div className="p-contact">
-              <p>
-                <i className="bi bi-envelope-fill"></i>{" "}
-                zyrilanne.c.villanueva@isu.edu.ph
-              </p>
-              <p>
-                <i className="bi bi-telephone-fill"></i> 09812464999
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
+      )}
 
       {/* --- FOOTER --- */}
-      <footer className="landing-footer">
-        <p>© 2026 MEDILOG - Isabela State University. All Rights Reserved.</p>
+      <footer className="corporate-footer">
+        <div className="footer-content container">
+          <div className="footer-brand">
+            <div className="footer-logo-row">
+              <img
+                src="/assets/isu-logo-300x300.png"
+                alt="ISU Logo"
+                className="footer-logo-img"
+              />
+              <img
+                src="/medilog-icon.svg"
+                alt="Medilog"
+                className="footer-logo-img"
+              />
+              <span className="footer-brand-name">MEDILOG</span>
+            </div>
+            <p className="footer-tagline">
+              A Medical Service Management System for Isabela State University
+              campus infirmaries.
+            </p>
+          </div>
+
+          <div className="footer-links">
+            <h5>Quick Links</h5>
+            <ul>
+              <li>
+                <button onClick={() => scrollToSection("hero")}>Home</button>
+              </li>
+              <li>
+                <button onClick={() => scrollToSection("features")}>
+                  Features
+                </button>
+              </li>
+              <li>
+                <button onClick={() => scrollToSection("how-it-works")}>
+                  How It Works
+                </button>
+              </li>
+              <li>
+                <button onClick={() => setShowAboutUs(true)}>About Us</button>
+              </li>
+            </ul>
+          </div>
+
+          <div className="footer-contact">
+            <h5>Contact Us</h5>
+            <ul>
+              <li>
+                <i className="bi bi-envelope"></i>
+                <a href="mailto:medilogisu@gmail.com">medilogisu@gmail.com</a>
+              </li>
+              <li>
+                <i className="bi bi-geo-alt"></i>
+                <span>Isabela State University, Echague, Isabela</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <div className="footer-bottom container">
+          <p>© 2026 MEDILOG — Isabela State University. All Rights Reserved.</p>
+        </div>
       </footer>
     </div>
   );

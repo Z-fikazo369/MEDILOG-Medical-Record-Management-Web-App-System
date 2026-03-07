@@ -9,6 +9,7 @@ import {
   bulkUpdateStatus,
   getHierarchicalAggregation,
   exportRecords,
+  exportTallyRecords,
   getPendingRecordCounts,
 } from "../controllers/medicalRecordController.js";
 
@@ -36,6 +37,7 @@ router.get(
   getHierarchicalAggregation,
 );
 router.get("/records/export", protect, isAdmin, exportRecords);
+router.get("/records/tally-export", protect, isAdmin, exportTallyRecords);
 router.get("/records/pending-counts", protect, isAdmin, getPendingRecordCounts);
 
 // ❌ TINANGGAL NA RIN DITO 'YUNG ROUTE PARA SA TALLY EXPORT

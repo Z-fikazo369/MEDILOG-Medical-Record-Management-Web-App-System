@@ -44,8 +44,70 @@ const StudentAccountsView: React.FC<StudentAccountsViewProps> = ({
     null,
   );
 
+  // Validation errors
+  const [editErrors, setEditErrors] = useState<Record<string, string>>({});
+
   // ID Modal
   const [showIdModal, setShowIdModal] = useState<string | null>(null);
+
+  // --- Validation Helpers ---
+
+  const validateField = (field: string, value: string): string => {
+    switch (field) {
+      case "username":
+        if (!value.trim()) return "Name is required.";
+        if (value.trim().length < 2)
+          return "Name must be at least 2 characters.";
+        return "";
+      case "email":
+        if (!value.trim()) return "Email is required.";
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value))
+          return "Invalid email format.";
+        return "";
+      case "studentId":
+        if (!value.trim()) return "Student ID is required.";
+        return "";
+      case "lrn":
+        if (!value.trim()) return "LRN is required.";
+        if (!/^\d+$/.test(value)) return "LRN must contain only digits.";
+        if (value.length !== 12) return "LRN must be exactly 12 digits.";
+        return "";
+      default:
+        return "";
+    }
+  };
+
+  const validateAllFields = (
+    account: StudentAccount,
+  ): Record<string, string> => {
+    const errors: Record<string, string> = {};
+    errors.username = validateField("username", account.username);
+    errors.email = validateField("email", account.email);
+    errors.studentId = validateField("studentId", account.studentId);
+    errors.lrn = validateField("lrn", account.lrn);
+    // Remove empty entries
+    Object.keys(errors).forEach((k) => {
+      if (!errors[k]) delete errors[k];
+    });
+    return errors;
+  };
+
+  const handleEditFieldChange = (
+    field: keyof StudentAccount,
+    value: string,
+  ) => {
+    if (!editingAccount) return;
+    const updated = { ...editingAccount, [field]: value };
+    setEditingAccount(updated);
+    // Real-time validation
+    const err = validateField(field, value);
+    setEditErrors((prev) => {
+      const next = { ...prev };
+      if (err) next[field] = err;
+      else delete next[field];
+      return next;
+    });
+  };
 
   // --- Data Loading ---
 
@@ -185,11 +247,15 @@ const StudentAccountsView: React.FC<StudentAccountsViewProps> = ({
 
   const handleEditAccount = (account: StudentAccount) => {
     setEditingAccount({ ...account });
+    setEditErrors({});
     setShowEditAccountModal(true);
   };
 
   const handleSaveAccountEdit = async () => {
     if (!editingAccount) return;
+    const errors = validateAllFields(editingAccount);
+    setEditErrors(errors);
+    if (Object.keys(errors).length > 0) return;
     try {
       await authAPI.updateStudentAccount(editingAccount._id, {
         username: editingAccount.username,
@@ -575,57 +641,62 @@ const StudentAccountsView: React.FC<StudentAccountsViewProps> = ({
                     <label className="form-label fw-semibold">Name</label>
                     <input
                       type="text"
-                      className="form-control"
+                      className={`form-control${editErrors.username ? " is-invalid" : ""}`}
                       value={editingAccount.username}
                       onChange={(e) =>
-                        setEditingAccount({
-                          ...editingAccount,
-                          username: e.target.value,
-                        })
+                        handleEditFieldChange("username", e.target.value)
                       }
                     />
+                    {editErrors.username && (
+                      <div className="invalid-feedback">
+                        {editErrors.username}
+                      </div>
+                    )}
                   </div>
                   <div className="col-md-12">
                     <label className="form-label fw-semibold">Email</label>
                     <input
                       type="email"
-                      className="form-control"
+                      className={`form-control${editErrors.email ? " is-invalid" : ""}`}
                       value={editingAccount.email}
                       onChange={(e) =>
-                        setEditingAccount({
-                          ...editingAccount,
-                          email: e.target.value,
-                        })
+                        handleEditFieldChange("email", e.target.value)
                       }
                     />
+                    {editErrors.email && (
+                      <div className="invalid-feedback">{editErrors.email}</div>
+                    )}
                   </div>
                   <div className="col-md-6">
                     <label className="form-label fw-semibold">Student ID</label>
                     <input
                       type="text"
-                      className="form-control"
+                      className={`form-control${editErrors.studentId ? " is-invalid" : ""}`}
                       value={editingAccount.studentId}
                       onChange={(e) =>
-                        setEditingAccount({
-                          ...editingAccount,
-                          studentId: e.target.value,
-                        })
+                        handleEditFieldChange("studentId", e.target.value)
                       }
                     />
+                    {editErrors.studentId && (
+                      <div className="invalid-feedback">
+                        {editErrors.studentId}
+                      </div>
+                    )}
                   </div>
                   <div className="col-md-6">
                     <label className="form-label fw-semibold">LRN</label>
                     <input
                       type="text"
-                      className="form-control"
+                      className={`form-control${editErrors.lrn ? " is-invalid" : ""}`}
                       value={editingAccount.lrn}
+                      maxLength={12}
                       onChange={(e) =>
-                        setEditingAccount({
-                          ...editingAccount,
-                          lrn: e.target.value,
-                        })
+                        handleEditFieldChange("lrn", e.target.value)
                       }
                     />
+                    {editErrors.lrn && (
+                      <div className="invalid-feedback">{editErrors.lrn}</div>
+                    )}
                   </div>
                   <div className="col-md-12">
                     <label className="form-label fw-semibold">Status</label>
@@ -653,6 +724,7 @@ const StudentAccountsView: React.FC<StudentAccountsViewProps> = ({
                   onClick={() => {
                     setShowEditAccountModal(false);
                     setEditingAccount(null);
+                    setEditErrors({});
                   }}
                 >
                   Cancel
@@ -661,6 +733,7 @@ const StudentAccountsView: React.FC<StudentAccountsViewProps> = ({
                   type="button"
                   className="btn btn-success"
                   onClick={handleSaveAccountEdit}
+                  disabled={Object.keys(editErrors).length > 0}
                 >
                   <i className="bi bi-save me-2"></i>Save Changes
                 </button>

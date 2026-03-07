@@ -1,10 +1,12 @@
 import React, { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useLocation } from "react-router-dom";
 import { authAPI } from "../../services/api";
 import Logo from "../Logo";
 
 const ForgotPassword: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const loginRole = (location.state as any)?.loginRole || "student";
 
   const [step, setStep] = useState<"email" | "reset">("email");
   const [email, setEmail] = useState("");
@@ -21,12 +23,12 @@ const ForgotPassword: React.FC = () => {
     setLoading(true);
 
     try {
-      const response = await authAPI.forgotPassword({ email });
+      const response = await authAPI.forgotPassword({ email, loginRole });
       setMessage(response.message);
       setStep("reset");
     } catch (err: any) {
       setError(
-        err.response?.data?.message || "Failed to send OTP. Please try again."
+        err.response?.data?.message || "Failed to send OTP. Please try again.",
       );
     } finally {
       setLoading(false);
@@ -58,12 +60,12 @@ const ForgotPassword: React.FC = () => {
       setMessage(response.message);
 
       setTimeout(() => {
-        navigate("/login/student");
+        navigate(`/login/${loginRole}`);
       }, 2000);
     } catch (err: any) {
       setError(
         err.response?.data?.message ||
-          "Failed to reset password. Please try again."
+          "Failed to reset password. Please try again.",
       );
     } finally {
       setLoading(false);
@@ -119,7 +121,7 @@ const ForgotPassword: React.FC = () => {
               </button>
 
               <div className="text-center">
-                <Link to="/login/student" className="text-muted">
+                <Link to={`/login/${loginRole}`} className="text-muted">
                   <i className="bi bi-arrow-left me-2"></i>
                   Back to Login
                 </Link>

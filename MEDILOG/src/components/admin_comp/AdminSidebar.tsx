@@ -7,7 +7,8 @@ type ViewType =
   | "staffAccounts"
   | "pharmacy"
   | "backup"
-  | "aiAssistant";
+  | "aiAssistant"
+  | "activityLog";
 
 type RecordType =
   | "physicalExam"
@@ -19,6 +20,7 @@ type RecordType =
 interface AdminSidebarProps {
   view: ViewType;
   setView: (view: ViewType) => void;
+  recordType: RecordType;
   setRecordType: (type: RecordType) => void;
   pendingCount: number;
   staffPendingCount: number;
@@ -33,6 +35,7 @@ interface AdminSidebarProps {
 const AdminSidebar: React.FC<AdminSidebarProps> = ({
   view,
   setView,
+  recordType,
   setRecordType,
   pendingCount,
   staffPendingCount,
@@ -152,6 +155,8 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
           </label>
         </li>
 
+        <hr className="sidebar-separator" />
+
         {collapsed ? (
           <li className="nav-item">
             <label
@@ -196,26 +201,23 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
             </label>
 
             {isRecordsOpen && (
-              <ul
-                className="nav flex-column ms-3 mt-1 border-start border-2 ps-2"
-                style={{ borderColor: "rgba(255,255,255,0.2) !important" }}
-              >
+              <ul className="nav flex-column admin-records-submenu">
                 <li className="nav-item">
                   <a
-                    className="nav-link py-1 text-white-50"
+                    className={`nav-link records-submenu-item py-1${view === "patientRecords" && recordType === "physicalExam" ? " records-submenu-active" : ""}`}
                     href="#"
                     onClick={(e) => {
                       e.preventDefault();
                       setView("patientRecords");
                       setRecordType("physicalExam");
                     }}
-                    style={{ fontSize: "0.9rem" }}
                   >
+                    <i className="bi bi-person-vcard me-2"></i>
                     Physical Exam
                     {(recordPendingCounts.physicalExam || 0) > 0 && (
                       <span
                         className="badge bg-warning text-dark ms-auto rounded-pill"
-                        style={{ fontSize: "0.65rem" }}
+                        style={{ fontSize: "0.6rem" }}
                       >
                         {recordPendingCounts.physicalExam}
                       </span>
@@ -224,20 +226,20 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 </li>
                 <li className="nav-item">
                   <a
-                    className="nav-link py-1 text-white-50"
+                    className={`nav-link records-submenu-item py-1${view === "patientRecords" && recordType === "monitoring" ? " records-submenu-active" : ""}`}
                     href="#"
                     onClick={(e) => {
                       e.preventDefault();
                       setView("patientRecords");
                       setRecordType("monitoring");
                     }}
-                    style={{ fontSize: "0.9rem" }}
                   >
+                    <i className="bi bi-heart-pulse me-2"></i>
                     Monitoring
                     {(recordPendingCounts.monitoring || 0) > 0 && (
                       <span
                         className="badge bg-warning text-dark ms-auto rounded-pill"
-                        style={{ fontSize: "0.65rem" }}
+                        style={{ fontSize: "0.6rem" }}
                       >
                         {recordPendingCounts.monitoring}
                       </span>
@@ -246,20 +248,20 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 </li>
                 <li className="nav-item">
                   <a
-                    className="nav-link py-1 text-white-50"
+                    className={`nav-link records-submenu-item py-1${view === "patientRecords" && recordType === "certificate" ? " records-submenu-active" : ""}`}
                     href="#"
                     onClick={(e) => {
                       e.preventDefault();
                       setView("patientRecords");
                       setRecordType("certificate");
                     }}
-                    style={{ fontSize: "0.9rem" }}
                   >
+                    <i className="bi bi-file-earmark-medical me-2"></i>
                     Certificate
                     {(recordPendingCounts.certificate || 0) > 0 && (
                       <span
                         className="badge bg-warning text-dark ms-auto rounded-pill"
-                        style={{ fontSize: "0.65rem" }}
+                        style={{ fontSize: "0.6rem" }}
                       >
                         {recordPendingCounts.certificate}
                       </span>
@@ -268,20 +270,20 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 </li>
                 <li className="nav-item">
                   <a
-                    className="nav-link py-1 text-white-50"
+                    className={`nav-link records-submenu-item py-1${view === "patientRecords" && recordType === "medicineIssuance" ? " records-submenu-active" : ""}`}
                     href="#"
                     onClick={(e) => {
                       e.preventDefault();
                       setView("patientRecords");
                       setRecordType("medicineIssuance");
                     }}
-                    style={{ fontSize: "0.9rem" }}
                   >
+                    <i className="bi bi-capsule me-2"></i>
                     Medicine Issuance
                     {(recordPendingCounts.medicineIssuance || 0) > 0 && (
                       <span
                         className="badge bg-warning text-dark ms-auto rounded-pill"
-                        style={{ fontSize: "0.65rem" }}
+                        style={{ fontSize: "0.6rem" }}
                       >
                         {recordPendingCounts.medicineIssuance}
                       </span>
@@ -290,20 +292,20 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 </li>
                 <li className="nav-item">
                   <a
-                    className="nav-link py-1 text-white-50"
+                    className={`nav-link records-submenu-item py-1${view === "patientRecords" && recordType === "laboratoryRequest" ? " records-submenu-active" : ""}`}
                     href="#"
                     onClick={(e) => {
                       e.preventDefault();
                       setView("patientRecords");
                       setRecordType("laboratoryRequest");
                     }}
-                    style={{ fontSize: "0.9rem" }}
                   >
+                    <i className="bi bi-clipboard2-pulse me-2"></i>
                     Laboratory Request
                     {(recordPendingCounts.laboratoryRequest || 0) > 0 && (
                       <span
                         className="badge bg-warning text-dark ms-auto rounded-pill"
-                        style={{ fontSize: "0.65rem" }}
+                        style={{ fontSize: "0.6rem" }}
                       >
                         {recordPendingCounts.laboratoryRequest}
                       </span>
@@ -324,6 +326,20 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
               title="Backup"
             >
               <i className="bi bi-cloud-arrow-up"></i> {!collapsed && "Backup"}
+            </label>
+          </li>
+        )}
+
+        {!isLimitedStaff && (
+          <li className="nav-item">
+            <label
+              onClick={() => setView("activityLog")}
+              className={`nav-link ${view === "activityLog" ? "active" : ""}`}
+              style={{ cursor: "pointer" }}
+              title="Activity Log"
+            >
+              <i className="bi bi-clock-history"></i>{" "}
+              {!collapsed && "Activity Log"}
             </label>
           </li>
         )}

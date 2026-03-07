@@ -6,7 +6,10 @@ import LaboratoryRequest from "../models/LaboratoryRequest.js";
 import AdminActivityLog from "../models/AdminActivityLog.js";
 import { Parser } from "json2csv";
 import ExcelJS from "exceljs";
-import { createNotification } from "./notificationController.js";
+import {
+  createNotification,
+  createAdminNotification,
+} from "./notificationController.js";
 
 // ==================== HELPER FUNCTIONS ====================
 
@@ -61,9 +64,10 @@ const buildFilterQuery = (query) => {
   return filter;
 };
 
-// ✅ Helper to log admin activity
+// ✅ Helper to log admin/staff activity
 const logAdminActivity = async (req, action, actionDetails) => {
-  if (!req.user || req.user.role !== "admin") return;
+  if (!req.user || (req.user.role !== "admin" && req.user.role !== "staff"))
+    return;
 
   try {
     const ipAddress =
@@ -95,6 +99,19 @@ export async function createRecord(req, res) {
     const Model = getModel(recordType);
     const record = new Model(recordData);
     await record.save();
+
+    // Notify admins about the new submission
+    try {
+      const studentName =
+        recordData.name ||
+        recordData.studentName ||
+        recordData.patientName ||
+        "A student";
+      await createAdminNotification(studentName, record._id, recordType);
+    } catch (notifErr) {
+      console.error("Admin notification failed:", notifErr);
+    }
+
     res.status(201).json({
       message: "Record created successfully",
       record,
@@ -268,11 +285,28 @@ export async function updateRecord(req, res) {
     });
 
     // ✅ Log the activity
+    let formName = "Record";
+    if (recordType === "physicalExam") formName = "Physical Exam";
+    if (recordType === "monitoring") formName = "Medical Monitoring";
+    if (recordType === "certificate") formName = "Medical Certificate";
+    if (recordType === "medicineIssuance") formName = "Medicine Issuance";
+    if (recordType === "laboratoryRequest") formName = "Laboratory Request";
+    const studentName =
+      updatedRecord.studentName ||
+      updatedRecord.name ||
+      updatedRecord.patientName ||
+      "Unknown";
+    const detailParts = [`${formName} — ${studentName}`];
+    if (updates.status) detailParts.push(`Status: ${updates.status}`);
+    if (updates.diagnosis && updates.diagnosis !== originalRecord.diagnosis)
+      detailParts.push("Added diagnosis");
+    if (updates.meds && updates.meds !== originalRecord.meds)
+      detailParts.push("Added treatment notes");
     await logAdminActivity(req, "UPDATE_RECORD", {
       recordType,
       recordId: id,
       userId: updatedRecord.studentId.toString(),
-      details: `Updated record with status: ${updates.status}`,
+      details: detailParts.join(" | "),
     });
   } catch (error) {
     console.error("❌ Update record error:", error);
@@ -295,10 +329,19 @@ export async function deleteRecord(req, res) {
     res.json({ message: "Record deleted successfully" });
 
     // ✅ Log the activity
+    let delFormName = "Record";
+    if (recordType === "physicalExam") delFormName = "Physical Exam";
+    if (recordType === "monitoring") delFormName = "Medical Monitoring";
+    if (recordType === "certificate") delFormName = "Medical Certificate";
+    if (recordType === "medicineIssuance") delFormName = "Medicine Issuance";
+    if (recordType === "laboratoryRequest") delFormName = "Laboratory Request";
+    const delStudentName =
+      record.studentName || record.name || record.patientName || "Unknown";
     await logAdminActivity(req, "DELETE_RECORD", {
       recordType,
       recordId: id,
       userId: record.studentId?.toString(),
+      details: `${delFormName} — ${delStudentName}`,
     });
   } catch (error) {
     console.error("❌ Delete record error:", error);
@@ -317,9 +360,16 @@ export async function bulkDeleteRecords(req, res) {
     });
 
     // ✅ Log the activity
+    let bulkDelForm = "Records";
+    if (recordType === "physicalExam") bulkDelForm = "Physical Exams";
+    if (recordType === "monitoring") bulkDelForm = "Medical Monitoring";
+    if (recordType === "certificate") bulkDelForm = "Medical Certificates";
+    if (recordType === "medicineIssuance") bulkDelForm = "Medicine Issuances";
+    if (recordType === "laboratoryRequest") bulkDelForm = "Laboratory Requests";
     await logAdminActivity(req, "BULK_DELETE_RECORDS", {
       recordType,
       count: result.deletedCount,
+      details: `Deleted ${result.deletedCount} ${bulkDelForm}`,
     });
   } catch (error) {
     console.error("❌ Bulk delete error:", error);
@@ -374,10 +424,16 @@ export async function bulkUpdateStatus(req, res) {
     });
 
     // ✅ Log the activity
+    let bulkForm = "Records";
+    if (recordType === "physicalExam") bulkForm = "Physical Exams";
+    if (recordType === "monitoring") bulkForm = "Medical Monitoring";
+    if (recordType === "certificate") bulkForm = "Medical Certificates";
+    if (recordType === "medicineIssuance") bulkForm = "Medicine Issuances";
+    if (recordType === "laboratoryRequest") bulkForm = "Laboratory Requests";
     await logAdminActivity(req, "BULK_UPDATE_STATUS", {
       recordType,
       count: result.modifiedCount,
-      details: `Changed status to: ${status}`,
+      details: `${result.modifiedCount} ${bulkForm} — Status: ${status}`,
     });
   } catch (error) {
     console.error("❌ Bulk update error:", error);
@@ -390,42 +446,67 @@ export async function bulkUpdateStatus(req, res) {
 // FIXED: Corrected date range calculation for accurate weekly monitoring
 export async function getHierarchicalAggregation(req, res) {
   try {
-    const { recordType } = req.query; // 👈 TINANGGAL ANG 'days'
-    const Model = getModel(recordType);
+    const { recordType, dateFrom, dateTo, ...extraFilters } = req.query;
 
-    // --- BAGONG DATE LOGIC (Current Month) ---
+    // --- DATE RANGE LOGIC ---
+    // If dateFrom/dateTo provided, use them; otherwise default to current month
     const today = new Date();
-    // Unang araw ng kasalukuyang buwan (e.g., Nov 1, 2025 at 00:00:00)
-    const startDate = new Date(today.getFullYear(), today.getMonth(), 1);
-    startDate.setHours(0, 0, 0, 0);
+    let startDate, endDate;
 
-    // Huling araw ng kasalukuyang buwan (e.g., Nov 30, 2025 at 23:59:59)
-    const endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-    endDate.setHours(23, 59, 59, 999);
+    if (dateFrom) {
+      startDate = new Date(dateFrom);
+      startDate.setHours(0, 0, 0, 0);
+    } else {
+      startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+      startDate.setHours(0, 0, 0, 0);
+    }
 
-    // Bilang ng araw sa buwan na 'to
-    const daysInMonth = endDate.getDate();
-    // --- END NG BAGONG DATE LOGIC ---
+    if (dateTo) {
+      endDate = new Date(dateTo);
+      endDate.setHours(23, 59, 59, 999);
+    } else {
+      endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+      endDate.setHours(23, 59, 59, 999);
+    }
 
-    console.log(`\n📅 AGGREGATION for ${recordType}:`, {
-      month: today.toLocaleString("en-US", { month: "long" }),
-      startDate: startDate.toISOString().split("T")[0],
-      endDate: endDate.toISOString().split("T")[0],
-      daysInMonth: daysInMonth,
-      description: `Data for the Current Month`, // ✅ In-update ang description
-    });
+    // --- BUILD EXTRA FILTER $match STAGE ---
+    // Accepts optional pre-filters like course, gender, sex, degree, action, diagnosis, civilStatus
+    const buildExtraMatch = () => {
+      const match = {};
+      const allowed = [
+        "course",
+        "year",
+        "gender",
+        "sex",
+        "degree",
+        "action",
+        "diagnosis",
+        "remarks",
+        "symptoms",
+      ];
+      allowed.forEach((key) => {
+        if (extraFilters[key]) {
+          match[key] = { $regex: new RegExp(extraFilters[key], "i") };
+        }
+      });
+      return Object.keys(match).length > 0 ? [{ $match: match }] : [];
+    };
 
-    // Determine which field to use for date filtering
-    let basePipeline;
-    let dateFieldForGrouping;
-
-    if (recordType === "physicalExam") {
-      basePipeline = [
+    // Build the date-filtered base pipeline per record type
+    const buildBasePipeline = (type) => {
+      if (type === "monitoring") {
+        // Monitoring uses createdAt (Date type)
+        return [{ $match: { createdAt: { $gte: startDate, $lte: endDate } } }];
+      }
+      // All others store dates as strings: physicalExam/certificate use "date",
+      // medicineIssuance uses "date", laboratoryRequest uses "issueDate"
+      const stringField = type === "laboratoryRequest" ? "$issueDate" : "$date";
+      return [
         {
           $addFields: {
             parsedDate: {
               $dateFromString: {
-                dateString: { $substr: ["$date", 0, 10] },
+                dateString: { $substr: [stringField, 0, 10] },
                 format: "%Y-%m-%d",
                 onError: "$createdAt",
                 onNull: "$createdAt",
@@ -433,257 +514,359 @@ export async function getHierarchicalAggregation(req, res) {
             },
           },
         },
+        { $match: { parsedDate: { $gte: startDate, $lte: endDate } } },
+      ];
+    };
+
+    const extraMatch = buildExtraMatch();
+    let tallyData = [];
+    let totalCount = 0;
+
+    // ==================================================================
+    // TALLYING LOGIC PER COLLECTION
+    // ==================================================================
+
+    if (recordType === "medicineIssuance") {
+      // 1. Medicine Issuance — $unwind medicines, group by name + course, $sum quantity
+      const basePipeline = buildBasePipeline("medicineIssuance");
+      tallyData = await MedicineIssuance.aggregate([
+        ...basePipeline,
+        ...extraMatch,
+        { $unwind: "$medicines" },
         {
-          $match: {
-            parsedDate: { $gte: startDate, $lte: endDate },
+          $group: {
+            _id: { medicineName: "$medicines.name", course: "$course" },
+            totalQuantity: { $sum: "$medicines.quantity" },
           },
         },
-      ];
-      dateFieldForGrouping = "$parsedDate";
+        {
+          $project: {
+            _id: 0,
+            medicineName: "$_id.medicineName",
+            course: "$_id.course",
+            totalQuantity: 1,
+          },
+        },
+        { $sort: { totalQuantity: -1 } },
+      ]);
+      totalCount = tallyData.reduce((sum, r) => sum + r.totalQuantity, 0);
     } else if (recordType === "monitoring") {
-      basePipeline = [
+      // 2. Medical Monitoring — group by symptoms; count visits
+      const basePipeline = buildBasePipeline("monitoring");
+      tallyData = await MedicalMonitoring.aggregate([
+        ...basePipeline,
+        ...extraMatch,
         {
-          $match: {
-            createdAt: { $gte: startDate, $lte: endDate },
+          $group: {
+            _id: { symptoms: "$symptoms" },
+            visitCount: { $sum: 1 },
           },
         },
-      ];
-      dateFieldForGrouping = "$createdAt";
+        {
+          $project: {
+            _id: 0,
+            symptoms: "$_id.symptoms",
+            visitCount: 1,
+          },
+        },
+        { $sort: { visitCount: -1 } },
+      ]);
+      totalCount = tallyData.reduce((sum, r) => sum + r.visitCount, 0);
+    } else if (recordType === "physicalExam") {
+      // 3. New Student Assessment — group by course, year, gender; count students
+      const basePipeline = buildBasePipeline("physicalExam");
+      tallyData = await PhysicalExam.aggregate([
+        ...basePipeline,
+        ...extraMatch,
+        {
+          $group: {
+            _id: { course: "$course", year: "$year", gender: "$gender" },
+            studentCount: { $sum: 1 },
+          },
+        },
+        {
+          $project: {
+            _id: 0,
+            course: "$_id.course",
+            year: "$_id.year",
+            gender: "$_id.gender",
+            studentCount: 1,
+          },
+        },
+        { $sort: { course: 1, year: 1 } },
+      ]);
+      totalCount = tallyData.reduce((sum, r) => sum + r.studentCount, 0);
     } else if (recordType === "certificate") {
-      basePipeline = [
+      // 4. Medical Certificates — group by diagnosis, remarks; count certificates
+      const basePipeline = buildBasePipeline("certificate");
+      tallyData = await MedicalCertificate.aggregate([
+        ...basePipeline,
+        ...extraMatch,
         {
-          $addFields: {
-            parsedDate: {
-              $dateFromString: {
-                dateString: { $substr: ["$date", 0, 10] },
-                format: "%Y-%m-%d",
-                onError: "$createdAt",
-                onNull: "$createdAt",
-              },
+          $group: {
+            _id: {
+              diagnosis: "$diagnosis",
+              remarks: "$remarks",
             },
+            certificateCount: { $sum: 1 },
           },
         },
         {
-          $match: {
-            parsedDate: { $gte: startDate, $lte: endDate },
+          $project: {
+            _id: 0,
+            diagnosis: "$_id.diagnosis",
+            remarks: "$_id.remarks",
+            certificateCount: 1,
           },
         },
-      ];
-      dateFieldForGrouping = "$parsedDate";
+        { $sort: { certificateCount: -1 } },
+      ]);
+      totalCount = tallyData.reduce((sum, r) => sum + r.certificateCount, 0);
     } else if (recordType === "laboratoryRequest") {
-      basePipeline = [
-        {
-          $addFields: {
-            parsedDate: {
-              $dateFromString: {
-                dateString: { $substr: ["$issueDate", 0, 10] },
-                format: "%Y-%m-%d",
-                onError: "$createdAt",
-                onNull: "$createdAt",
-              },
-            },
-          },
-        },
-        {
-          $match: {
-            parsedDate: { $gte: startDate, $lte: endDate },
-          },
-        },
+      // 5. Laboratory Requests — count true values for each boolean test field
+      const basePipeline = buildBasePipeline("laboratoryRequest");
+      const testFields = [
+        { field: "routineUrinalysisTests.pregnancy", label: "Pregnancy Test" },
+        { field: "routineUrinalysisTests.fecalysis", label: "Fecalysis" },
+        { field: "cbcTests.hemoglobin", label: "Hemoglobin" },
+        { field: "cbcTests.hematocrit", label: "Hematocrit" },
+        { field: "cbcTests.bloodSugar", label: "Blood Sugar" },
+        { field: "cbcTests.plateletCT", label: "Platelet CT" },
+        { field: "gramStain.hpsBhTest", label: "HPS/BH Test" },
+        { field: "gramStain.vaginalSmear", label: "Vaginal Smear" },
+        { field: "bloodChemistry.fbs", label: "FBS" },
+        { field: "bloodChemistry.uricAcid", label: "Uric Acid" },
+        { field: "bloodChemistry.cholesterol", label: "Cholesterol" },
+        { field: "bloodChemistry.hdl", label: "HDL" },
+        { field: "bloodChemistry.tsh", label: "TSH" },
+        { field: "bloodChemistry.totalProtein", label: "Total Protein" },
+        { field: "papSmear.cxrInterpretation", label: "CXR Interpretation" },
+        { field: "papSmear.ecgInterpretation", label: "ECG Interpretation" },
+        { field: "widhalTest.salmonella", label: "Salmonella (Widal)" },
       ];
-      dateFieldForGrouping = "$parsedDate";
-    }
 
-    // ✅ DEBUG: Show matched records with their actual dates
-    const matchedRecords = await Model.aggregate([
-      ...basePipeline,
-      {
-        $project: {
-          _id: 1,
-          date: 1,
-          arrival: 1,
-          createdAt: 1,
-          status: 1,
-          parsedDate: 1,
-        },
-      },
-    ]);
+      // Build a single $group stage that sums all boolean test fields
+      const groupAccumulators = {};
+      testFields.forEach((t) => {
+        const key = t.field.replace(".", "_");
+        groupAccumulators[key] = {
+          $sum: { $cond: [{ $eq: [`$${t.field}`, true] }, 1, 0] },
+        };
+      });
 
-    console.log(`🔍 ${recordType} - Matched ${matchedRecords.length} records:`);
-    matchedRecords.forEach((r, idx) => {
-      console.log(
-        `  ${idx + 1}. ID: ${r._id}, Date: ${r.date || "N/A"}, Created: ${
-          r.createdAt?.toISOString().split("T")[0]
-        }, Status: ${r.status}`,
-      );
-    });
-
-    // ✅ DAILY STATS with proper date grouping
-    const dailyStatsRaw = await Model.aggregate([
-      ...basePipeline,
-      {
-        $group: {
-          _id: {
-            $dateToString: {
-              format: "%Y-%m-%d",
-              date: dateFieldForGrouping,
-              timezone: "Asia/Manila",
-            },
-          },
-          count: { $sum: 1 },
-          pending: {
-            $sum: { $cond: [{ $eq: ["$status", "pending"] }, 1, 0] },
-          },
-          approved: {
-            $sum: { $cond: [{ $eq: ["$status", "approved"] }, 1, 0] },
-          },
-          rejected: {
-            $sum: { $cond: [{ $eq: ["$status", "rejected"] }, 1, 0] },
-          },
-        },
-      },
-      { $sort: { _id: 1 } },
-    ]);
-
-    console.log(`📊 ${recordType} - Daily breakdown:`, dailyStatsRaw);
-
-    // ✅ FILL MISSING DATES (Para sa buong buwan)
-    const dailyStats = [];
-    const currentDate = new Date(startDate); // Magsimula sa Araw 1 (Nov 1)
-
-    for (let i = 0; i < daysInMonth; i++) {
-      // 👈 Ginamit ang 'daysInMonth'
-      const dateString = currentDate.toISOString().split("T")[0];
-      const existingStat = dailyStatsRaw.find(
-        (stat) => stat._id === dateString,
-      );
-
-      dailyStats.push(
-        existingStat || {
-          _id: dateString,
-          count: 0,
-          pending: 0,
-          approved: 0,
-          rejected: 0,
-        },
-      );
-
-      currentDate.setDate(currentDate.getDate() + 1); // Umabante papuntang next day
-    }
-
-    // ✅ STATUS STATS
-    const statusStats = await Model.aggregate([
-      ...basePipeline,
-      { $group: { _id: "$status", count: { $sum: 1 } } },
-    ]);
-
-    // ✅ GENDER STATS
-    const genderField = recordType === "physicalExam" ? "$gender" : "$sex";
-    const genderStats = await Model.aggregate([
-      ...basePipeline,
-      { $group: { _id: genderField, count: { $sum: 1 } } },
-    ]);
-
-    // ✅ ADDITIONAL STATS based on record type
-    let additionalStats = {};
-
-    if (recordType === "physicalExam") {
-      const [courseStats, yearStats] = await Promise.all([
-        Model.aggregate([
-          ...basePipeline,
-          { $match: { course: { $exists: true, $ne: "" } } },
-          { $group: { _id: "$course", count: { $sum: 1 } } },
-          { $sort: { count: -1 } },
-        ]),
-        Model.aggregate([
-          ...basePipeline,
-          { $match: { year: { $exists: true, $ne: "" } } },
-          { $group: { _id: "$year", count: { $sum: 1 } } },
-          { $sort: { _id: 1 } },
-        ]),
+      const result = await LaboratoryRequest.aggregate([
+        ...basePipeline,
+        ...extraMatch,
+        { $group: { _id: null, ...groupAccumulators } },
       ]);
 
-      additionalStats = { courseStats, yearStats };
-    } else if (recordType === "monitoring") {
-      const [symptomsStats, actionStats, degreeStats] = await Promise.all([
-        Model.aggregate([
-          ...basePipeline,
-          { $match: { symptoms: { $exists: true, $ne: "" } } },
-          { $group: { _id: "$symptoms", count: { $sum: 1 } } },
-          { $sort: { count: -1 } },
-          { $limit: 10 },
-        ]),
-        Model.aggregate([
-          ...basePipeline,
-          { $match: { action: { $exists: true, $ne: "" } } },
-          { $group: { _id: "$action", count: { $sum: 1 } } },
-          { $sort: { count: -1 } },
-        ]),
-        Model.aggregate([
-          ...basePipeline,
-          { $match: { degree: { $exists: true, $ne: "" } } },
-          { $group: { _id: "$degree", count: { $sum: 1 } } },
-          { $sort: { count: -1 } },
-        ]),
-      ]);
+      const counts = result[0] || {};
+      tallyData = testFields
+        .map((t) => ({
+          testName: t.label,
+          count: counts[t.field.replace(".", "_")] || 0,
+        }))
+        .filter((t) => t.count > 0)
+        .sort((a, b) => b.count - a.count);
 
-      additionalStats = { symptomsStats, actionStats, degreeStats };
-    } else if (recordType === "certificate") {
-      const [ageStats, civilStatusStats] = await Promise.all([
-        Model.aggregate([
-          ...basePipeline,
-          { $match: { age: { $exists: true, $ne: "" } } },
-          { $addFields: { ageNum: { $toInt: "$age" } } },
-          {
-            $bucket: {
-              groupBy: "$ageNum",
-              boundaries: [0, 18, 25, 30, 40, 50, 100],
-              default: "Other",
-              output: { count: { $sum: 1 } },
-            },
-          },
-        ]),
-        Model.aggregate([
-          ...basePipeline,
-          { $match: { civilStatus: { $exists: true, $ne: "" } } },
-          { $group: { _id: "$civilStatus", count: { $sum: 1 } } },
-        ]),
-      ]);
-
-      additionalStats = { ageStats, civilStatusStats };
+      totalCount = tallyData.reduce((sum, r) => sum + r.count, 0);
+    } else {
+      return res.status(400).json({ message: "Invalid record type" });
     }
 
-    // ✅ TOTAL COUNT
-    const totalCountResult = await Model.aggregate([
-      ...basePipeline,
-      { $count: "total" },
-    ]);
-    const totalCount = totalCountResult[0]?.total || 0;
-
-    console.log(`✅ ${recordType} FINAL:`, {
-      totalCount,
-      dailyStatsCount: dailyStats.length,
-      statusBreakdown: statusStats,
+    // Build a clean object of applied filters for the response
+    const appliedFilters = {};
+    [
+      "course",
+      "year",
+      "gender",
+      "sex",
+      "degree",
+      "action",
+      "diagnosis",
+      "remarks",
+      "symptoms",
+    ].forEach((k) => {
+      if (extraFilters[k]) appliedFilters[k] = extraFilters[k];
     });
 
     res.json({
       recordType,
-      period: `Current Month (${today.toLocaleString("en-US", {
-        month: "long",
-      })})`, // ✅ In-update ang text
-      startDate: startDate.toISOString().split("T")[0],
-      endDate: endDate.toISOString().split("T")[0],
+      dateFrom: startDate.toISOString().split("T")[0],
+      dateTo: endDate.toISOString().split("T")[0],
       totalCount,
-      dailyStats,
-      statusStats,
-      genderStats,
-      ...additionalStats,
+      tallyData,
+      appliedFilters,
     });
   } catch (error) {
-    console.error(`❌ Aggregation error for ${req.query.recordType}:`, error);
+    console.error(`❌ Tally error for ${req.query.recordType}:`, error);
     res.status(500).json({
       message: error.message,
       stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
     });
+  }
+}
+
+// ==================== TALLY EXPORT (CSV of individual matching records) ====================
+export async function exportTallyRecords(req, res) {
+  try {
+    const { recordType, dateFrom, dateTo, ...extraFilters } = req.query;
+
+    const Model = getModel(recordType);
+
+    // Build date filter
+    const today = new Date();
+    let startDate, endDate;
+    if (dateFrom) {
+      startDate = new Date(dateFrom);
+      startDate.setHours(0, 0, 0, 0);
+    } else {
+      startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+      startDate.setHours(0, 0, 0, 0);
+    }
+    if (dateTo) {
+      endDate = new Date(dateTo);
+      endDate.setHours(23, 59, 59, 999);
+    } else {
+      endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+      endDate.setHours(23, 59, 59, 999);
+    }
+
+    // Build query filter
+    const filter = {};
+    // Date filter
+    if (recordType === "monitoring") {
+      filter.createdAt = { $gte: startDate, $lte: endDate };
+    } else {
+      const dateField =
+        recordType === "laboratoryRequest" ? "issueDate" : "date";
+      filter[dateField] = {
+        $gte: startDate.toISOString().split("T")[0],
+        $lte: endDate.toISOString().split("T")[0],
+      };
+    }
+
+    // Extra filters (regex)
+    const allowed = [
+      "course",
+      "year",
+      "gender",
+      "sex",
+      "degree",
+      "action",
+      "diagnosis",
+      "remarks",
+      "symptoms",
+    ];
+    allowed.forEach((key) => {
+      if (extraFilters[key]) {
+        filter[key] = { $regex: new RegExp(extraFilters[key], "i") };
+      }
+    });
+
+    const records = await Model.find(filter).sort({ createdAt: -1 }).lean();
+
+    if (records.length === 0) {
+      return res
+        .status(404)
+        .json({ message: "No records found for this filter" });
+    }
+
+    // Build CSV with only the online form details per record type
+    let csvRows;
+    if (recordType === "physicalExam") {
+      csvRows = records.map((r) => ({
+        Date: r.date,
+        Name: r.name,
+        Gender: r.gender,
+        Course: r.course,
+        Year: r.year,
+        Status: r.status,
+      }));
+    } else if (recordType === "monitoring") {
+      csvRows = records.map((r) => ({
+        Date: r.createdAt
+          ? new Date(r.createdAt).toISOString().split("T")[0]
+          : "",
+        Arrival: r.arrival,
+        "Patient Name": r.patientName,
+        Sex: r.sex,
+        Degree: r.degree,
+        "Student No": r.studentNo,
+        Symptoms: r.symptoms,
+        Action: r.action,
+        Meds: r.meds || "",
+        Exit: r.exit || "",
+        Duration: r.duration || "",
+        Personnel: r.personnel || "",
+        Status: r.status,
+      }));
+    } else if (recordType === "certificate") {
+      csvRows = records.map((r) => ({
+        Date: r.date,
+        Name: r.name,
+        Age: r.age,
+        Sex: r.sex,
+        "Civil Status": r.civilStatus,
+        School: r.school,
+        "ID Number": r.idNumber,
+        Diagnosis: r.diagnosis || "",
+        Remarks: r.remarks || "",
+        Status: r.status,
+      }));
+    } else if (recordType === "medicineIssuance") {
+      csvRows = records.map((r) => ({
+        Date: r.date,
+        Course: r.course,
+        Diagnosis: r.diagnosis || "",
+        Medicines: (r.medicines || [])
+          .map((m) => `${m.name} (x${m.quantity})`)
+          .join("; "),
+        Status: r.status,
+      }));
+    } else if (recordType === "laboratoryRequest") {
+      csvRows = records.map((r) => {
+        const tests = [];
+        if (r.routineUrinalysisTests?.pregnancy) tests.push("Pregnancy Test");
+        if (r.routineUrinalysisTests?.fecalysis) tests.push("Fecalysis");
+        if (r.cbcTests?.hemoglobin) tests.push("Hemoglobin");
+        if (r.cbcTests?.hematocrit) tests.push("Hematocrit");
+        if (r.cbcTests?.bloodSugar) tests.push("Blood Sugar");
+        if (r.cbcTests?.plateletCT) tests.push("Platelet CT");
+        if (r.gramStain?.hpsBhTest) tests.push("HPS/BH Test");
+        if (r.gramStain?.vaginalSmear) tests.push("Vaginal Smear");
+        if (r.bloodChemistry?.fbs) tests.push("FBS");
+        if (r.bloodChemistry?.uricAcid) tests.push("Uric Acid");
+        if (r.bloodChemistry?.cholesterol) tests.push("Cholesterol");
+        if (r.bloodChemistry?.hdl) tests.push("HDL");
+        if (r.bloodChemistry?.tsh) tests.push("TSH");
+        if (r.bloodChemistry?.totalProtein) tests.push("Total Protein");
+        if (r.papSmear?.cxrInterpretation) tests.push("CXR Interpretation");
+        if (r.papSmear?.ecgInterpretation) tests.push("ECG Interpretation");
+        if (r.widhalTest?.salmonella) tests.push("Salmonella (Widal)");
+        return {
+          "Issue Date": r.issueDate,
+          Name: r.name,
+          "Nurse On Duty": r.nurseOnDuty || "",
+          "Tests Requested": tests.join("; "),
+          Others: r.others || "",
+          Status: r.status,
+        };
+      });
+    }
+
+    const parser = new Parser();
+    const csv = parser.parse(csvRows);
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename=Tally_${recordType}_${Date.now()}.csv`,
+    );
+    res.send(csv);
+  } catch (error) {
+    console.error("❌ Tally export error:", error);
+    res.status(500).json({ message: error.message });
   }
 }
 
@@ -764,41 +947,102 @@ export async function exportRecords(req, res) {
       return res.status(404).json({ message: "No records to export" });
     }
 
-    // --- Mula dito pababa, ito 'yung original logic mo ---
+    // --- Explicit column mappings per record type for clean CSV ---
 
     const flatRecords = records.map((r) => {
-      const populatedStudent = r.studentId;
-      const studentIdString = populatedStudent?._id
-        ? populatedStudent._id.toString()
-        : r.studentEmail || "N/A";
-      const studentUsername = populatedStudent?.username || "N/A";
-      const studentEmailFromUser =
-        populatedStudent?.email || r.studentEmail || "N/A";
+      const pop = r.studentId;
+      const username = pop?.username || "N/A";
+      const email = pop?.email || r.studentEmail || "N/A";
 
-      const { _id, __v, studentId, approvedBy, updatedAt, ...rest } = r;
-
-      const cleanRecord = {
-        studentUsername: studentUsername,
-        studentEmail: studentEmailFromUser,
-        studentName: rest.studentName,
-        ...rest,
-      };
-
-      if (cleanRecord.createdAt) {
-        cleanRecord.createdAt = new Date(cleanRecord.createdAt).toLocaleString(
-          "en-US",
-          {
-            year: "numeric",
-            month: "2-digit",
-            day: "2-digit",
-            hour: "2-digit",
-            minute: "2-digit",
-            hour12: true,
-          },
-        );
+      if (recordType === "physicalExam") {
+        return {
+          "Student Username": username,
+          "Student Email": email,
+          Name: r.name || r.studentName || "",
+          Gender: r.gender || "",
+          Course: r.course || "",
+          Year: r.year || "",
+          Date: r.date || "",
+          Status: r.status || "",
+        };
+      } else if (recordType === "medicalMonitoring") {
+        return {
+          "Student Username": username,
+          "Student Email": email,
+          "Patient Name": r.patientName || r.studentName || "",
+          Sex: r.sex || "",
+          Degree: r.degree || "",
+          "Student No": r.studentNo || "",
+          Arrival: r.arrival || "",
+          Symptoms: r.symptoms || "",
+          Action: r.action || "",
+          Meds: r.meds || "",
+          Exit: r.exit || "",
+          Duration: r.duration || "",
+          Personnel: r.personnel || "",
+          Status: r.status || "",
+        };
+      } else if (recordType === "medicalCertificate") {
+        return {
+          "Student Username": username,
+          "Student Email": email,
+          Name: r.name || r.studentName || "",
+          Age: r.age || "",
+          Sex: r.sex || "",
+          "Civil Status": r.civilStatus || "",
+          School: r.school || "",
+          "ID Number": r.idNumber || "",
+          Date: r.date || "",
+          Diagnosis: r.diagnosis || "",
+          Remarks: r.remarks || "",
+          Status: r.status || "",
+        };
+      } else if (recordType === "medicineIssuance") {
+        return {
+          "Student Username": username,
+          "Student Email": email,
+          "Student Name": r.studentName || "",
+          Date: r.date || "",
+          Course: r.course || "",
+          Diagnosis: r.diagnosis || "",
+          Medicines: (r.medicines || [])
+            .map((m) => `${m.name} (x${m.quantity})`)
+            .join("; "),
+          Status: r.status || "",
+        };
+      } else if (recordType === "laboratoryRequest") {
+        const tests = [];
+        if (r.routineUrinalysisTests?.pregnancy) tests.push("Pregnancy Test");
+        if (r.routineUrinalysisTests?.fecalysis) tests.push("Fecalysis");
+        if (r.cbcTests?.hemoglobin) tests.push("Hemoglobin");
+        if (r.cbcTests?.hematocrit) tests.push("Hematocrit");
+        if (r.cbcTests?.bloodSugar) tests.push("Blood Sugar");
+        if (r.cbcTests?.plateletCT) tests.push("Platelet CT");
+        if (r.gramStain?.hpsBhTest) tests.push("HPS/BH Test");
+        if (r.gramStain?.vaginalSmear) tests.push("Vaginal Smear");
+        if (r.bloodChemistry?.fbs) tests.push("FBS");
+        if (r.bloodChemistry?.uricAcid) tests.push("Uric Acid");
+        if (r.bloodChemistry?.cholesterol) tests.push("Cholesterol");
+        if (r.bloodChemistry?.hdl) tests.push("HDL");
+        if (r.bloodChemistry?.tsh) tests.push("TSH");
+        if (r.bloodChemistry?.totalProtein) tests.push("Total Protein");
+        if (r.papSmear?.cxrInterpretation) tests.push("CXR Interpretation");
+        if (r.papSmear?.ecgInterpretation) tests.push("ECG Interpretation");
+        if (r.widhalTest?.salmonella) tests.push("Salmonella (Widal)");
+        return {
+          "Student Username": username,
+          "Student Email": email,
+          "Issue Date": r.issueDate || "",
+          Name: r.name || r.studentName || "",
+          "Nurse On Duty": r.nurseOnDuty || "",
+          "Tests Requested": tests.join("; "),
+          Others: r.others || "",
+          Status: r.status || "",
+        };
       }
 
-      return cleanRecord;
+      // fallback generic (shouldn't reach here)
+      return { "Student Username": username, "Student Email": email };
     });
 
     if (format === "csv") {

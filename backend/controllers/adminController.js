@@ -12,6 +12,7 @@ import MedicineIssuance from "../models/MedicineIssuance.js";
 import LaboratoryRequest from "../models/LaboratoryRequest.js";
 import PharmacyInventory from "../models/PharmacyInventory.js";
 import Notification from "../models/Notification.js";
+import AdminActivityLog from "../models/AdminActivityLog.js";
 
 // Utility to get the current directory name in ES Modules
 const __filename = fileURLToPath(import.meta.url);
@@ -203,4 +204,151 @@ export const restoreSystem = (req, res) => {
     message:
       "System restore is a critical operation and must be handled by manual developer intervention. Automated restore is disabled.",
   });
+};
+
+// 5. GET ACTIVITY LOGS (GET /api/users/activity-logs)
+export const getActivityLogs = async (req, res) => {
+  try {
+    const {
+      page = 1,
+      limit = 20,
+      action,
+      search,
+      startDate,
+      endDate,
+      staffId,
+    } = req.query;
+
+    const pageNum = Math.max(1, parseInt(page));
+    const limitNum = Math.min(50, Math.max(1, parseInt(limit)));
+
+    // Build filter
+    const filter = {};
+
+    // Filter by action type
+    if (action && action !== "all") {
+      filter.action = action;
+    }
+
+    // Filter by specific staff member
+    if (staffId) {
+      filter.adminId = staffId;
+    }
+
+    // Filter by date range
+    if (startDate || endDate) {
+      filter.createdAt = {};
+      if (startDate) filter.createdAt.$gte = new Date(startDate);
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        filter.createdAt.$lte = end;
+      }
+    }
+
+    // Search by username or email
+    if (search) {
+      const searchRegex = new RegExp(search, "i");
+      filter.$or = [
+        { adminUsername: searchRegex },
+        { adminEmail: searchRegex },
+        { "actionDetails.details": searchRegex },
+        { "actionDetails.userName": searchRegex },
+      ];
+    }
+
+    const [logs, total] = await Promise.all([
+      AdminActivityLog.find(filter)
+        .sort({ createdAt: -1 })
+        .skip((pageNum - 1) * limitNum)
+        .limit(limitNum)
+        .lean(),
+      AdminActivityLog.countDocuments(filter),
+    ]);
+
+    // Get distinct action types for filter dropdown
+    const actionTypes = await AdminActivityLog.distinct("action");
+
+    // Get distinct staff members for filter dropdown
+    const staffMembers = await AdminActivityLog.aggregate([
+      {
+        $group: {
+          _id: "$adminId",
+          username: { $first: "$adminUsername" },
+          email: { $first: "$adminEmail" },
+        },
+      },
+      { $sort: { username: 1 } },
+    ]);
+
+    res.json({
+      logs,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        totalPages: Math.ceil(total / limitNum),
+      },
+      filters: {
+        actionTypes,
+        staffMembers,
+      },
+    });
+  } catch (error) {
+    console.error("❌ Failed to fetch activity logs:", error);
+    res.status(500).json({ message: "Failed to fetch activity logs" });
+  }
+};
+
+// 6. GET STAFF ACTIVITY SUMMARY (GET /api/users/activity-logs/staff-summary)
+export const getStaffActivitySummary = async (req, res) => {
+  try {
+    // Aggregate logs per staff member with action breakdown
+    const staffSummaries = await AdminActivityLog.aggregate([
+      {
+        $group: {
+          _id: "$adminId",
+          username: { $first: "$adminUsername" },
+          email: { $first: "$adminEmail" },
+          totalActions: { $sum: 1 },
+          lastActivity: { $max: "$createdAt" },
+          actions: { $push: { action: "$action", createdAt: "$createdAt" } },
+        },
+      },
+      { $sort: { totalActions: -1 } },
+    ]);
+
+    // Build action breakdown for each staff
+    // Fetch profile pictures for all staff members
+    const staffIds = staffSummaries.map((s) => s._id);
+    const users = await User.find(
+      { _id: { $in: staffIds } },
+      { _id: 1, profilePictureUrl: 1 },
+    ).lean();
+    const profileMap = {};
+    users.forEach((u) => {
+      profileMap[u._id.toString()] = u.profilePictureUrl || "";
+    });
+
+    const result = staffSummaries.map((staff) => {
+      const actionBreakdown = {};
+      staff.actions.forEach((a) => {
+        actionBreakdown[a.action] = (actionBreakdown[a.action] || 0) + 1;
+      });
+      return {
+        _id: staff._id,
+        username: staff.username,
+        email: staff.email,
+        totalActions: staff.totalActions,
+        lastActivity: staff.lastActivity,
+        actionBreakdown,
+        profilePictureUrl: profileMap[staff._id.toString()] || "",
+      };
+    });
+
+    res.json({ staffSummaries: result });
+  } catch (error) {
+    console.error("❌ Failed to fetch staff summaries:", error);
+    res.status(500).json({ message: "Failed to fetch staff summaries" });
+  }
 };

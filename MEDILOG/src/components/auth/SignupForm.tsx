@@ -55,9 +55,14 @@ const SignupForm: React.FC = () => {
       data.append("idPicture", idPicture);
 
       if (userType === "student") {
-        if (formData.lrn.length !== 12)
-          throw new Error("LRN must be exactly 12 digits");
-        if (!formData.studentId) throw new Error("Student ID is required.");
+        if (!/^\d{12}$/.test(formData.lrn))
+          throw new Error("LRN must be exactly 12 digits (numbers only).");
+        if (!formData.studentId.trim())
+          throw new Error("Student ID is required.");
+        if (!/^[A-Za-z0-9\-]+$/.test(formData.studentId.trim()))
+          throw new Error(
+            "Student ID can only contain letters, numbers, and dashes.",
+          );
 
         data.append("lrn", formData.lrn);
         data.append("studentId", formData.studentId);
@@ -203,6 +208,9 @@ const SignupForm: React.FC = () => {
                     type="text"
                     name="lrn"
                     maxLength={12}
+                    inputMode="numeric"
+                    pattern="\d{12}"
+                    title="LRN must be exactly 12 digits"
                     className="form-input"
                     onChange={handleChange}
                     required
