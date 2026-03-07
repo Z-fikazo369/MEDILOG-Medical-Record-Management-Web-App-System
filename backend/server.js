@@ -18,9 +18,11 @@ const app = express();
 // Middleware
 app.use(
   cors({
-    origin: true,
+    origin: [
+      "http://localhost:5173",
+      "https://medilog-isu.vercel.app",
+    ],
     credentials: true,
-    // 👇 ITO ANG MAHALAGA: Para mabasa ng frontend ang headers na ito
     exposedHeaders: ["RateLimit-Limit", "RateLimit-Remaining", "Retry-After"],
   }),
 );
