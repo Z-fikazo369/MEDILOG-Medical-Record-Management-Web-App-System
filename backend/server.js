@@ -16,9 +16,24 @@ import aiAssistantRoutes from "./routes/aiAssistantRoutes.js";
 const app = express();
 
 // Middleware
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://medilog-isu.vercel.app",
+];
+
 app.use(
   cors({
-    origin: ["http://localhost:5173", "https://medilog-isu.vercel.app"],
+    origin: function (origin, callback) {
+      if (
+        !origin ||
+        allowedOrigins.includes(origin) ||
+        origin.endsWith(".vercel.app")
+      ) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
     credentials: true,
     exposedHeaders: ["RateLimit-Limit", "RateLimit-Remaining", "Retry-After"],
   }),
