@@ -243,7 +243,7 @@ const LoginForm: React.FC = () => {
                 name="email"
                 className="form-input"
                 placeholder={
-                  isStudent ? "Email or Student ID" : "name@isu.edu.ph"
+                  isStudent ? "Email or Student ID" : "name@gmail.com"
                 }
                 value={formData.email}
                 onChange={handleChange}
