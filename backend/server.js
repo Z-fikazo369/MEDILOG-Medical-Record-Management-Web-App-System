@@ -18,10 +18,7 @@ const app = express();
 // Middleware
 app.use(
   cors({
-    origin: [
-      "http://localhost:5173",
-      "https://medilog-isu.vercel.app",
-    ],
+    origin: ["http://localhost:5173", "https://medilog-isu.vercel.app"],
     credentials: true,
     exposedHeaders: ["RateLimit-Limit", "RateLimit-Remaining", "Retry-After"],
   }),
