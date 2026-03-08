@@ -41,7 +41,7 @@ const StudentSidebar: React.FC<StudentSidebarProps> = ({
 
   return (
     <div
-      className={`sidebar p-3 d-flex flex-column ${collapsed ? "sidebar-collapsed" : ""}`}
+      className={`sidebar d-flex flex-column ${collapsed ? "sidebar-collapsed" : ""}`}
       style={{ minHeight: "100vh" }}
     >
       {/* Logo */}

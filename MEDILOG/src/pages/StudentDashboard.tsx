@@ -37,7 +37,17 @@ const StudentDashboard: React.FC = () => {
 
   // --- Navigation State ---
   const [activeView, setActiveView] = useState<StudentView>("landing");
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(
+    window.innerWidth < 992,
+  );
+
+  // Auto-close sidebar on mobile when navigating
+  const handleSetActiveView = (view: StudentView) => {
+    setActiveView(view);
+    if (window.innerWidth < 992) {
+      setSidebarCollapsed(true);
+    }
+  };
 
   // --- History Data ---
   const [newStudentHistory, setNewStudentHistory] = useState<NewStudentData[]>(
@@ -392,13 +402,6 @@ const StudentDashboard: React.FC = () => {
     )}&background=2c5f2d&color=fff&size=128&bold=true`;
   };
 
-  // --- Notification Click Handler ---
-  const handleNotificationsClick = () => {
-    setActiveView("notifications");
-    loadNotifications();
-    handleMarkAsRead();
-  };
-
   // --- Render Active View ---
   const renderView = () => {
     switch (activeView) {
@@ -411,40 +414,40 @@ const StudentDashboard: React.FC = () => {
           />
         );
       case "formOptions":
-        return <StudentFormOptionsView setActiveView={setActiveView} />;
+        return <StudentFormOptionsView setActiveView={handleSetActiveView} />;
       case "newStudent":
         return (
           <NewStudentForm
             onSubmit={handleNewStudentSubmit}
-            setActiveView={setActiveView}
+            setActiveView={handleSetActiveView}
           />
         );
       case "monitoring":
         return (
           <MonitoringForm
             onSubmit={handleMedMonitoringSubmit}
-            setActiveView={setActiveView}
+            setActiveView={handleSetActiveView}
           />
         );
       case "certificate":
         return (
           <CertificateForm
             onSubmit={handleMedCertSubmit}
-            setActiveView={setActiveView}
+            setActiveView={handleSetActiveView}
           />
         );
       case "medicineIssuance":
         return (
           <MedicineIssuanceForm
             onSubmit={handleMedicineIssuanceSubmit}
-            setActiveView={setActiveView}
+            setActiveView={handleSetActiveView}
           />
         );
       case "laboratoryRequest":
         return (
           <LaboratoryRequestForm
             onSubmit={handleLaboratoryRequestSubmit}
-            setActiveView={setActiveView}
+            setActiveView={handleSetActiveView}
           />
         );
       case "history":
@@ -469,20 +472,40 @@ const StudentDashboard: React.FC = () => {
   return (
     <>
       <LoadingOverlay show={loggingOut} message="Signing out..." />
-      <div className="d-flex">
+      <div className="d-flex" style={{ minHeight: "100vh" }}>
+        {/* --- Mobile Sidebar Overlay --- */}
+        {!sidebarCollapsed && (
+          <div
+            className="sidebar-overlay d-lg-none"
+            onClick={() => setSidebarCollapsed(true)}
+          />
+        )}
+
         {/* --- Sidebar --- */}
         <StudentSidebar
           activeView={activeView}
-          setActiveView={setActiveView}
+          setActiveView={handleSetActiveView}
           unreadCount={unreadCount}
-          onNotificationsClick={handleNotificationsClick}
+          onNotificationsClick={() => {
+            handleSetActiveView("notifications");
+            loadNotifications();
+            handleMarkAsRead();
+          }}
           onLogout={handleLogout}
           collapsed={sidebarCollapsed}
           onToggleCollapse={() => setSidebarCollapsed((prev) => !prev)}
         />
 
         {/* --- Main Container --- */}
-        <div className={`flex-grow-1 d-flex flex-column`}>
+        <div
+          className="flex-grow-1 d-flex flex-column"
+          style={{
+            minWidth: 0,
+            overflow: "auto",
+            position: "relative",
+            zIndex: 1,
+          }}
+        >
           {/* Header */}
           <header className="main-header d-flex justify-content-between align-items-center">
             <div className="d-flex align-items-center gap-3">
@@ -511,7 +534,10 @@ const StudentDashboard: React.FC = () => {
 
             <div className="user-info d-flex align-items-center gap-3">
               {activeView === "landing" && (
-                <div style={{ textAlign: "right" }}>
+                <div
+                  className="d-none d-sm-block"
+                  style={{ textAlign: "right" }}
+                >
                   <span
                     style={{
                       fontWeight: 600,

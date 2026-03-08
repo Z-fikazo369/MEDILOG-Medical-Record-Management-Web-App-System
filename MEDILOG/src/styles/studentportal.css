@@ -1129,3 +1129,166 @@ body {
 .modal-content-custom {
   background: #ffffff;
 }
+
+/* ==========================================
+   MOBILE RESPONSIVE - SIDEBAR OVERLAY
+   ========================================== */
+
+/* Sidebar overlay backdrop for mobile */
+.sidebar-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1040;
+  cursor: pointer;
+}
+
+@media (max-width: 991.98px) {
+  /* Sidebar becomes fixed overlay on mobile */
+  .sidebar.sidebar {
+    position: fixed !important;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    z-index: 1050;
+    width: 260px !important;
+    min-width: 260px !important;
+    padding: 2rem 1.5rem !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    overflow: visible !important;
+    overflow-y: auto !important;
+    box-shadow: 5px 0 25px rgba(0, 0, 0, 0.2);
+    transform: translateX(0);
+    transition: transform 0.3s ease !important;
+  }
+
+  .sidebar.sidebar.sidebar-collapsed {
+    transform: translateX(-100%) !important;
+    pointer-events: none !important;
+    width: 260px !important;
+    min-width: 260px !important;
+    padding: 2rem 1.5rem !important;
+    opacity: 1 !important;
+    overflow: hidden !important;
+  }
+
+  /* Reduce header & section padding */
+  .main-header {
+    padding: 1rem 0 0.5rem 0 !important;
+  }
+
+  .section,
+  .landing-page,
+  .form-options,
+  .history-view,
+  .notifications-view,
+  .profile-view {
+    padding: 1rem !important;
+  }
+
+  /* Scale down card icons */
+  .card-icon-box {
+    width: 50px;
+    height: 50px;
+    border-radius: 14px;
+    margin-right: 14px;
+  }
+
+  .card-icon-box i {
+    font-size: 1.5rem;
+  }
+
+  .card-text-content h5 {
+    font-size: 1rem;
+  }
+
+  .card-text-content p {
+    font-size: 0.8rem;
+  }
+
+  .card-arrow {
+    width: 32px;
+    height: 32px;
+  }
+
+  /* Notification items wrap */
+  .notif-modern-item {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  /* History rows stack on mobile */
+  .isu-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+  }
+
+  .isu-col.status {
+    text-align: left;
+    min-width: auto;
+  }
+
+  /* Profile page adaptation */
+  .profilePage {
+    max-width: 100%;
+    padding: 0 0.5rem;
+  }
+
+  .profile-header {
+    padding: 1rem;
+  }
+
+  .profile-avatar {
+    width: 90px;
+    height: 90px;
+  }
+
+  /* History filter dropdown full width on mobile */
+  .history-filter-dropdown .dropdown-toggle {
+    min-width: unset;
+    width: 100%;
+  }
+
+  .history-filter-dropdown .dropdown-menu {
+    min-width: unset;
+    width: 100%;
+  }
+}
+
+@media (max-width: 575.98px) {
+  .section,
+  .landing-page,
+  .form-options,
+  .history-view,
+  .notifications-view,
+  .profile-view {
+    padding: 0.75rem !important;
+  }
+
+  .header-greeting h5 {
+    font-size: 1.1rem !important;
+  }
+
+  .modern-card {
+    padding: 1.25rem;
+  }
+
+  .option-card .card-body {
+    padding: 1.5rem;
+  }
+
+  .option-card-icon {
+    font-size: 2rem;
+    margin-right: 1rem;
+  }
+
+  .option-card .card-title {
+    font-size: 1.1rem;
+  }
+}
