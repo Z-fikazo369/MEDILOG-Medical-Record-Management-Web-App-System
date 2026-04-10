@@ -1,7 +1,9 @@
 // File: services/api.ts
 import axios from "axios";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+const API_URL = import.meta.env.DEV
+  ? "/api"
+  : import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 const api = axios.create({
   baseURL: API_URL,
@@ -530,10 +532,17 @@ export const analyticsAPI = {
     return response.data;
   },
 
-  getPredictiveAnalytics: async () => {
-    const response = await api.get("/analytics/predictive", {
-      timeout: 120000, // 2 minutes — CatBoost ML training can be slow on first load
-    });
+  getVisitForecast: async () => {
+    const response = await api.get("/analytics/visit-forecast");
+    return response.data;
+  },
+
+  retrainVisitForecast: async () => {
+    const response = await api.post(
+      "/analytics/visit-forecast/train",
+      {},
+      { timeout: 180000 },
+    );
     return response.data;
   },
 };

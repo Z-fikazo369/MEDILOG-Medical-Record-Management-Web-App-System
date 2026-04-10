@@ -16,8 +16,28 @@ import {
 
 const router = express.Router();
 
+const restrictSuperAdminAndHead = (req, res, next) => {
+  const email = String(req.user?.email || "")
+    .trim()
+    .toLowerCase();
+  const position = String(req.user?.position || "")
+    .trim()
+    .toLowerCase();
+  const isSuperAdmin = email === "admin@medilog.com";
+  const isHeadAccount = position.includes("head");
+
+  if (isSuperAdmin || isHeadAccount) {
+    return res.status(403).json({
+      message:
+        "AI Assistant access is disabled for super admin and head accounts.",
+    });
+  }
+
+  next();
+};
+
 // All routes require admin auth
-router.use(protect, isAdmin);
+router.use(protect, isAdmin, restrictSuperAdminAndHead);
 
 // Stats
 router.get("/stats", getStats);

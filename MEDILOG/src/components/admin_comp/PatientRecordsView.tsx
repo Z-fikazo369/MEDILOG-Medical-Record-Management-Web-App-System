@@ -2494,16 +2494,8 @@ const PatientRecordsView: React.FC<PatientRecordsViewProps> = ({
                 </div>
               </div>
 
-              {/* Modal Footer with Print Button */}
+              {/* Modal Footer */}
               <div className="modal-footer">
-                <button
-                  type="button"
-                  className="btn btn-info me-auto"
-                  onClick={handlePrint}
-                  title="Print this record as a formal document"
-                >
-                  <i className="bi bi-printer me-2"></i>Print Record
-                </button>
                 <button
                   type="button"
                   className="btn btn-secondary"

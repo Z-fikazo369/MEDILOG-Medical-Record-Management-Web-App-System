@@ -1,0 +1,20 @@
+{
+  "watch": [
+    "server.js",
+    "routes",
+    "controllers",
+    "models",
+    "middleware",
+    "utils",
+    "config",
+    "scripts"
+  ],
+  "ext": "js,mjs,cjs,json",
+  "ignore": [
+    "ml/models/**",
+    "ml/catboost_info/**",
+    "catboost_info/**",
+    "backups/**",
+    "*.log"
+  ]
+}

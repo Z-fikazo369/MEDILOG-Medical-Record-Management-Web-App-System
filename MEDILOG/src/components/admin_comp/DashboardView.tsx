@@ -2,9 +2,135 @@ import { useState, useEffect } from "react";
 import { analyticsAPI } from "../../services/api";
 import { DashboardCharts, type DashboardOverview } from "./DashboardCharts";
 import {
-  PredictiveAnalytics,
-  type PredictiveData,
-} from "./PredictiveAnalytics";
+  CartesianGrid,
+  Legend,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+
+interface VisitForecastResponse {
+  forecast?: {
+    targetMonth?: {
+      year?: number;
+      month?: number;
+      label?: string;
+    };
+    predictedVisits?: number;
+  };
+  weeklyForecast?: {
+    basis?: string;
+    monthlyEstimate?: number;
+    weeks?: {
+      year?: number;
+      week?: number;
+      label?: string;
+      predictedVisits?: number;
+      sharePercent?: number;
+    }[];
+  };
+  weeklyHistory?: {
+    year?: number;
+    week?: number;
+    month?: number;
+    count?: number;
+    label?: string;
+    actual?: number;
+    predicted?: number | null;
+  }[];
+  history?: {
+    year?: number;
+    week?: number;
+    month?: number;
+    count?: number;
+    label?: string;
+    actual?: number;
+    predicted?: number | null;
+  }[];
+  lastCompletedWeek?: {
+    year?: number;
+    week?: number;
+    label?: string;
+  };
+  currentWeekProgress?: {
+    year?: number;
+    week?: number;
+    label?: string;
+    actual?: number;
+    predicted?: number | null;
+    isPartial?: boolean;
+  };
+  modelMetadata?: {
+    trainedAt?: string;
+  };
+}
+
+function isoWeekStartDate(year: number, week: number): Date {
+  const simple = new Date(Date.UTC(year, 0, 1 + (week - 1) * 7));
+  const day = simple.getUTCDay();
+  const isoStart = new Date(simple);
+
+  if (day <= 4 && day !== 0) {
+    isoStart.setUTCDate(simple.getUTCDate() - day + 1);
+  } else {
+    isoStart.setUTCDate(simple.getUTCDate() + 8 - (day || 7));
+  }
+
+  return new Date(
+    isoStart.getUTCFullYear(),
+    isoStart.getUTCMonth(),
+    isoStart.getUTCDate(),
+  );
+}
+
+function toDateStamp(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function weekOrLabelToDateStamp(item: {
+  year?: number;
+  week?: number;
+  month?: number;
+  label?: string;
+}): string | null {
+  if (
+    typeof item.year === "number" &&
+    typeof item.week === "number" &&
+    item.week > 0
+  ) {
+    return toDateStamp(isoWeekStartDate(item.year, item.week));
+  }
+
+  if (
+    typeof item.year === "number" &&
+    typeof item.month === "number" &&
+    item.month > 0
+  ) {
+    return toDateStamp(new Date(item.year, item.month - 1, 1));
+  }
+
+  if (typeof item.label === "string") {
+    const isoMatch = item.label.match(/^(\d{4})-W(\d{2})$/);
+    if (isoMatch) {
+      const y = Number(isoMatch[1]);
+      const w = Number(isoMatch[2]);
+      return toDateStamp(isoWeekStartDate(y, w));
+    }
+
+    const dateLike = item.label.match(/^\d{4}-\d{2}-\d{2}$/);
+    if (dateLike) {
+      return item.label;
+    }
+  }
+
+  return null;
+}
 
 interface DashboardViewProps {
   pendingCount: number;
@@ -13,92 +139,130 @@ interface DashboardViewProps {
     accountTotalCount: number;
   }) => void;
   isLimitedStaff?: boolean;
+  isSuperAdminOrHead?: boolean;
 }
 
 const DashboardView: React.FC<DashboardViewProps> = ({
   pendingCount,
   onStatsLoaded,
   isLimitedStaff = false,
+  isSuperAdminOrHead = false,
 }) => {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<DashboardOverview | null>(null);
-  const [mlData, setMlData] = useState<PredictiveData | null>(null);
-  const [mlLoading, setMlLoading] = useState(true);
-  const [mlError, setMlError] = useState(false);
+  const [forecastLoading, setForecastLoading] = useState(true);
+  const [visitForecast, setVisitForecast] =
+    useState<VisitForecastResponse | null>(null);
+  const [forecastError, setForecastError] = useState("");
+  const [retrainLoading, setRetrainLoading] = useState(false);
+  const [retrainMessage, setRetrainMessage] = useState("");
   const [lastUpdated, setLastUpdated] = useState<string>("");
-  const [mlRetryCount, setMlRetryCount] = useState(0);
-
-  const fetchPredictiveWithRetry = async (
-    maxRetries = 2,
-  ): Promise<PredictiveData | null> => {
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
-      try {
-        const result = await analyticsAPI.getPredictiveAnalytics();
-        return result;
-      } catch (err) {
-        console.warn(
-          `Predictive analytics attempt ${attempt + 1}/${maxRetries} failed:`,
-          err,
-        );
-        if (attempt < maxRetries - 1) {
-          // Wait 2 seconds before retrying
-          await new Promise((r) => setTimeout(r, 2000));
-        }
-      }
-    }
-    return null;
-  };
 
   const fetchDashboardData = async (isSilent = false) => {
     try {
       if (!isSilent) setLoading(true);
-      setMlLoading(true);
-      setMlError(false);
-
-      // Fetch overview and predictive independently so one failure won't block the other
-      const overviewPromise = analyticsAPI.getDashboardOverview();
-      const predictivePromise = fetchPredictiveWithRetry(2);
-
-      const [overviewResult, predictiveResult] = await Promise.allSettled([
-        overviewPromise,
-        predictivePromise,
-      ]);
-
-      if (overviewResult.status === "fulfilled") {
-        const overview = overviewResult.value;
-        setData(overview);
-        setLastUpdated(new Date().toLocaleTimeString());
-        onStatsLoaded?.({
-          pendingCount: overview.accounts.pendingStudents,
-          accountTotalCount: overview.accounts.totalAccounts,
-        });
-      } else {
-        console.error(
-          "Failed to load dashboard overview:",
-          overviewResult.reason,
-        );
-      }
-
-      if (
-        predictiveResult.status === "fulfilled" &&
-        predictiveResult.value !== null
-      ) {
-        setMlData(predictiveResult.value);
-        setMlError(false);
-      } else {
-        console.error("Failed to load predictive analytics after retries");
-        setMlError(true);
-      }
+      const overview = await analyticsAPI.getDashboardOverview();
+      setData(overview);
+      setLastUpdated(new Date().toLocaleTimeString());
+      onStatsLoaded?.({
+        pendingCount: overview.accounts.pendingStudents,
+        accountTotalCount: overview.accounts.totalAccounts,
+      });
     } catch (error) {
       console.error("Failed to load dashboard data:", error);
     } finally {
       if (!isSilent) setLoading(false);
-      setMlLoading(false);
+    }
+  };
+
+  const fetchVisitForecast = async (isSilent = false) => {
+    try {
+      if (!isSilent) setForecastLoading(true);
+      const result = await analyticsAPI.getVisitForecast();
+      setVisitForecast(result);
+      setForecastError("");
+    } catch (error) {
+      const message =
+        (
+          error as {
+            response?: { data?: { message?: string } };
+          }
+        )?.response?.data?.message || "Visit forecast unavailable.";
+      setForecastError(message);
+      console.error("Failed to load visit forecast:", error);
+    } finally {
+      if (!isSilent) setForecastLoading(false);
+    }
+  };
+
+  const refreshAllData = async (isSilent = false) => {
+    await Promise.all([
+      fetchDashboardData(isSilent),
+      fetchVisitForecast(isSilent),
+    ]);
+  };
+
+  const handleRetrain = async () => {
+    try {
+      setRetrainLoading(true);
+      setRetrainMessage("");
+      const result = await analyticsAPI.retrainVisitForecast();
+      const baseMessage = result?.message || "Visit forecast model retrained.";
+      const detailParts: string[] = [];
+
+      if (typeof result?.dataSummary?.completedWeeksUsed === "number") {
+        detailParts.push(`used ${result.dataSummary.completedWeeksUsed} weeks`);
+      }
+      if (result?.dataSummary?.includesCurrentWeek === true) {
+        detailParts.push("included current week");
+      }
+
+      const details =
+        detailParts.length > 0 ? ` (${detailParts.join(", ")})` : "";
+      setRetrainMessage(`${baseMessage}${details}`);
+      await fetchVisitForecast(true);
+    } catch (error) {
+      const responseData = (
+        error as {
+          response?: {
+            data?: {
+              message?: string;
+              hint?: string;
+              foundWeeks?: number;
+              requiredWeeks?: number;
+            };
+          };
+        }
+      )?.response?.data;
+      const fallbackErrorText =
+        (error as { message?: string; code?: string })?.message ||
+        "Failed to retrain visit forecast.";
+
+      const baseMessage = responseData?.message || fallbackErrorText;
+
+      const detailParts: string[] = [];
+      if (
+        typeof responseData?.foundWeeks === "number" &&
+        typeof responseData?.requiredWeeks === "number"
+      ) {
+        detailParts.push(
+          `(found ${responseData.foundWeeks}/${responseData.requiredWeeks} weeks)`,
+        );
+      }
+      if (responseData?.hint) {
+        detailParts.push(responseData.hint);
+      }
+
+      const details = detailParts.length > 0 ? ` ${detailParts.join(" ")}` : "";
+      setRetrainMessage(`Failed: ${baseMessage}${details}`);
+      console.error("Visit forecast retrain failed:", error);
+    } finally {
+      setRetrainLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchDashboardData(false);
+    refreshAllData(false);
   }, []);
 
   if (loading) {
@@ -122,6 +286,130 @@ const DashboardView: React.FC<DashboardViewProps> = ({
     );
   }
 
+  const forecastTargetLabel =
+    visitForecast?.forecast?.targetMonth?.label || "N/A";
+  const predictedVisits = visitForecast?.forecast?.predictedVisits;
+  const weeklyForecast = visitForecast?.weeklyForecast;
+  const weeklyRows = weeklyForecast?.weeks || [];
+  const monthlyEstimate =
+    typeof weeklyForecast?.monthlyEstimate === "number"
+      ? weeklyForecast.monthlyEstimate
+      : predictedVisits;
+  const lastCompletedDateStamp = weekOrLabelToDateStamp({
+    year: visitForecast?.lastCompletedWeek?.year,
+    week: visitForecast?.lastCompletedWeek?.week,
+    label: visitForecast?.lastCompletedWeek?.label,
+  });
+  const lastCompletedLabel = lastCompletedDateStamp || "No completed week yet";
+  const retrainIsError = retrainMessage.toLowerCase().includes("failed");
+
+  const weeklyHistory =
+    visitForecast?.weeklyHistory && visitForecast.weeklyHistory.length > 0
+      ? visitForecast.weeklyHistory
+      : visitForecast?.history || [];
+  const currentWeekProgress = visitForecast?.currentWeekProgress;
+  const currentWeekLabel = currentWeekProgress
+    ? weekOrLabelToDateStamp(currentWeekProgress) ||
+      currentWeekProgress.label ||
+      "Current week"
+    : "";
+
+  type ChartPoint = {
+    period: string;
+    actual: number | null;
+    predicted: number | null;
+    kind: "history" | "current-week-progress" | "forecast";
+  };
+
+  const chartMap = new Map<string, ChartPoint>();
+
+  const upsertChartPoint = (
+    period: string | null,
+    values: Partial<Omit<ChartPoint, "period">>,
+  ) => {
+    if (!period) return;
+
+    const existing = chartMap.get(period) || {
+      period,
+      actual: null,
+      predicted: null,
+      kind: "forecast" as const,
+    };
+
+    chartMap.set(period, {
+      ...existing,
+      ...values,
+    });
+  };
+
+  weeklyHistory.forEach((item) => {
+    const period = weekOrLabelToDateStamp(item);
+    const actual =
+      typeof item.actual === "number"
+        ? item.actual
+        : typeof item.count === "number"
+          ? item.count
+          : null;
+    const predicted =
+      typeof item.predicted === "number" ? item.predicted : null;
+
+    upsertChartPoint(period, {
+      actual,
+      predicted,
+      kind: "history",
+    });
+  });
+
+  if (currentWeekProgress) {
+    const period = weekOrLabelToDateStamp(currentWeekProgress);
+    const actual =
+      typeof currentWeekProgress.actual === "number"
+        ? currentWeekProgress.actual
+        : null;
+    const predicted =
+      typeof currentWeekProgress.predicted === "number"
+        ? currentWeekProgress.predicted
+        : null;
+
+    upsertChartPoint(period, {
+      actual,
+      predicted,
+      kind: "current-week-progress",
+    });
+  }
+
+  weeklyRows.forEach((item) => {
+    const period = weekOrLabelToDateStamp(item);
+    const predicted =
+      typeof item.predictedVisits === "number" ? item.predictedVisits : null;
+
+    if (predicted === null) return;
+
+    const existing = period ? chartMap.get(period) : null;
+    upsertChartPoint(period, {
+      predicted,
+      kind:
+        existing?.kind === "history" ||
+        existing?.kind === "current-week-progress"
+          ? existing.kind
+          : "forecast",
+    });
+  });
+
+  const chartData = [...chartMap.values()].sort((a, b) =>
+    a.period.localeCompare(b.period),
+  );
+
+  const maxSeriesValue = chartData.reduce((max, item) => {
+    const actualValue = typeof item.actual === "number" ? item.actual : 0;
+    const predValue = typeof item.predicted === "number" ? item.predicted : 0;
+    const value = Math.max(actualValue, predValue);
+    return value > max ? value : max;
+  }, 0);
+  const yAxisBase = Math.max(10, maxSeriesValue);
+  const yAxisPadding = Math.max(6, Math.ceil(yAxisBase * 0.12));
+  const yAxisMax = Math.ceil((yAxisBase + yAxisPadding) / 5) * 5;
+
   const growth = parseFloat(data.records.growth);
   const growthColor =
     growth > 0 ? "text-success" : growth < 0 ? "text-danger" : "text-muted";
@@ -133,9 +421,11 @@ const DashboardView: React.FC<DashboardViewProps> = ({
         : "bi-dash";
 
   return (
-    <div className="fade-in">
+    <div
+      className={`fade-in dashboard-view ${isSuperAdminOrHead ? "dashboard-super" : ""}`}
+    >
       {/* ===== HEADER ===== */}
-      <div className="d-flex justify-content-end align-items-end mb-4">
+      <div className="dashboard-toolbar d-flex justify-content-end align-items-end">
         <div className="d-flex align-items-center gap-2">
           <span className="badge bg-success-subtle text-success border border-success-subtle px-3 py-2">
             <i className="bi bi-clock me-1"></i>
@@ -143,7 +433,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
           </span>
           <button
             className="btn btn-outline-success btn-sm"
-            onClick={() => fetchDashboardData(true)}
+            onClick={() => refreshAllData(true)}
             title="Refresh"
           >
             <i className="bi bi-arrow-clockwise"></i>
@@ -151,10 +441,302 @@ const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       </div>
 
+      {isLimitedStaff && (
+        <div
+          className="card shadow-sm mb-4"
+          style={{ border: "1px solid #e5e7eb" }}
+        >
+          <div className="card-body">
+            <div className="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+              <div>
+                <div className="d-flex align-items-center gap-2 mb-1">
+                  <span
+                    className="d-inline-flex align-items-center justify-content-center rounded-2"
+                    style={{
+                      width: 28,
+                      height: 28,
+                      background: "rgba(14, 116, 144, 0.12)",
+                      color: "#0e7490",
+                    }}
+                  >
+                    <i
+                      className="bi bi-graph-up-arrow"
+                      style={{ fontSize: "0.9rem" }}
+                    ></i>
+                  </span>
+                  <span className="fw-bold" style={{ color: "#0f172a" }}>
+                    Visit Forecast
+                  </span>
+                </div>
+                <div className="small text-muted">
+                  Forecast window: <strong>{forecastTargetLabel}</strong>
+                </div>
+              </div>
+
+              <button
+                className="btn btn-sm btn-outline-primary"
+                onClick={handleRetrain}
+                disabled={retrainLoading}
+              >
+                {retrainLoading ? "Retraining..." : "Retrain Model"}
+              </button>
+            </div>
+
+            {forecastLoading ? (
+              <div className="small text-muted">Loading visit forecast...</div>
+            ) : forecastError ? (
+              <div className="alert alert-warning mb-0 py-2 px-3 small">
+                {forecastError}
+              </div>
+            ) : (
+              <div className="row g-3">
+                <div className="col-12">
+                  <div
+                    className="p-3 rounded-3"
+                    style={{
+                      background:
+                        "linear-gradient(180deg, rgba(240,253,244,0.95) 0%, rgba(236,253,245,0.85) 100%)",
+                      border: "1px solid #bbf7d0",
+                    }}
+                  >
+                    <div
+                      className="small mb-2"
+                      style={{ color: "#166534", fontWeight: 600 }}
+                    >
+                      Weekly Actual vs Predicted
+                    </div>
+                    <div style={{ height: 230 }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={chartData}>
+                          <CartesianGrid
+                            strokeDasharray="2 6"
+                            stroke="#dcfce7"
+                            vertical={false}
+                          />
+                          <XAxis
+                            dataKey="period"
+                            tickFormatter={(value) => String(value)}
+                            interval="preserveStartEnd"
+                            tick={{ fontSize: 11, fill: "#166534" }}
+                            tickLine={false}
+                            axisLine={false}
+                          />
+                          <YAxis
+                            domain={[0, yAxisMax]}
+                            tick={{ fontSize: 11, fill: "#166534" }}
+                            tickCount={6}
+                            tickLine={false}
+                            axisLine={false}
+                          />
+                          <Tooltip
+                            contentStyle={{
+                              background: "#14532d",
+                              border: "none",
+                              borderRadius: 10,
+                              color: "#f0fdf4",
+                            }}
+                            labelStyle={{ color: "#bbf7d0", fontWeight: 700 }}
+                            itemStyle={{ color: "#f0fdf4" }}
+                          />
+                          <Legend />
+                          <Line
+                            type="monotone"
+                            dataKey="actual"
+                            name="Actual"
+                            stroke="#16a34a"
+                            strokeWidth={3}
+                            dot={{
+                              r: 4,
+                              fill: "#ffffff",
+                              stroke: "#16a34a",
+                              strokeWidth: 2,
+                            }}
+                            activeDot={{
+                              r: 6,
+                              fill: "#dcfce7",
+                              stroke: "#15803d",
+                              strokeWidth: 2,
+                            }}
+                            connectNulls={false}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="predicted"
+                            name="Predicted"
+                            stroke="#eab308"
+                            strokeWidth={3}
+                            strokeDasharray="8 4"
+                            dot={{
+                              r: 4,
+                              fill: "#ffffff",
+                              stroke: "#eab308",
+                              strokeWidth: 2,
+                            }}
+                            activeDot={{
+                              r: 6,
+                              fill: "#fef9c3",
+                              stroke: "#a16207",
+                              strokeWidth: 2,
+                            }}
+                            connectNulls
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="col-12 col-md-6">
+                  <div
+                    className="p-3 rounded-3"
+                    style={{
+                      background: "#f8fafc",
+                      border: "1px solid #e2e8f0",
+                    }}
+                  >
+                    <div className="small text-muted mb-1">
+                      Monthly Estimate (next 4 weeks sum)
+                    </div>
+                    <div
+                      className="fw-bold"
+                      style={{ fontSize: "1.6rem", color: "#0f172a" }}
+                    >
+                      {typeof monthlyEstimate === "number"
+                        ? monthlyEstimate.toLocaleString()
+                        : "N/A"}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="col-12 col-md-6">
+                  <div
+                    className="p-3 rounded-3"
+                    style={{
+                      background: "#f8fafc",
+                      border: "1px solid #e2e8f0",
+                    }}
+                  >
+                    <div className="small text-muted mb-1">
+                      Last Completed Week
+                    </div>
+                    <div className="fw-semibold" style={{ color: "#1e293b" }}>
+                      {lastCompletedLabel}
+                    </div>
+                  </div>
+                </div>
+
+                {currentWeekProgress && (
+                  <div className="col-12">
+                    <div
+                      className="p-3 rounded-3"
+                      style={{
+                        background: "#f8fafc",
+                        border: "1px solid #e2e8f0",
+                      }}
+                    >
+                      <div className="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <div>
+                          <div className="small text-muted mb-1">
+                            Current Week (In-progress)
+                          </div>
+                          <div
+                            className="fw-semibold"
+                            style={{ color: "#1e293b" }}
+                          >
+                            {currentWeekLabel}
+                          </div>
+                        </div>
+                        <span className="badge bg-warning-subtle text-warning border border-warning-subtle">
+                          Partial actual
+                        </span>
+                      </div>
+                      <div className="small mt-2" style={{ color: "#334155" }}>
+                        Actual so far:{" "}
+                        {typeof currentWeekProgress.actual === "number"
+                          ? currentWeekProgress.actual.toLocaleString()
+                          : "-"}
+                        {typeof currentWeekProgress.predicted === "number"
+                          ? ` | Predicted: ${currentWeekProgress.predicted.toLocaleString()}`
+                          : ""}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {weeklyRows.length > 0 && (
+                  <div className="col-12">
+                    <div
+                      className="p-3 rounded-3"
+                      style={{
+                        background: "#f8fafc",
+                        border: "1px solid #e2e8f0",
+                      }}
+                    >
+                      <div className="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                        <div className="small text-muted">
+                          Weekly Prediction (next 4 weeks)
+                        </div>
+                        <div className="small text-muted">
+                          Basis: Model-weekly forecast
+                        </div>
+                      </div>
+
+                      <div className="row g-2">
+                        {weeklyRows.map((week) => (
+                          <div
+                            className="col-6 col-md-3"
+                            key={`${week.year}-${week.week}-${week.label}`}
+                          >
+                            <div
+                              className="p-2 rounded-2 h-100"
+                              style={{
+                                border: "1px solid #dbeafe",
+                                background: "#eff6ff",
+                              }}
+                            >
+                              <div className="small text-muted">
+                                {weekOrLabelToDateStamp(week) ||
+                                  week.label ||
+                                  "Forecast week"}
+                              </div>
+                              <div
+                                className="fw-semibold"
+                                style={{ color: "#1e3a8a" }}
+                              >
+                                {typeof week.predictedVisits === "number"
+                                  ? week.predictedVisits.toLocaleString()
+                                  : "-"}
+                              </div>
+                              <div className="small text-muted">
+                                {typeof week.sharePercent === "number"
+                                  ? `${week.sharePercent}% share`
+                                  : ""}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {retrainMessage && (
+              <div
+                className={`mt-3 small ${retrainIsError ? "text-danger" : "text-success"}`}
+              >
+                {retrainMessage}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ===== TOP STAT CARDS (5) — hidden for limited staff ===== */}
       {!isLimitedStaff && (
-        <div className="row g-3 mb-4">
-          <div className="col-6 col-lg">
+        <div className="dashboard-stat-grid">
+          <div className="dashboard-stat-cell">
             <div className="dashboard-stat-card">
               <div className="dsc-icon green">
                 <i className="bi bi-people-fill"></i>
@@ -171,7 +753,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
               </div>
             </div>
           </div>
-          <div className="col-6 col-lg">
+          <div className="dashboard-stat-cell">
             <div className="dashboard-stat-card">
               <div className="dsc-icon blue">
                 <i className="bi bi-person-gear"></i>
@@ -188,7 +770,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
               </div>
             </div>
           </div>
-          <div className="col-6 col-lg">
+          <div className="dashboard-stat-cell">
             <div className="dashboard-stat-card">
               <div className="dsc-icon purple">
                 <i className="bi bi-activity"></i>
@@ -204,7 +786,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
               </div>
             </div>
           </div>
-          <div className="col-6 col-lg">
+          <div className="dashboard-stat-cell">
             <div className="dashboard-stat-card">
               <div className="dsc-icon orange">
                 <i className="bi bi-capsule"></i>
@@ -227,7 +809,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
               </div>
             </div>
           </div>
-          <div className="col-6 col-lg">
+          <div className="dashboard-stat-cell">
             <div className="dashboard-stat-card">
               <div className="dsc-icon teal">
                 <i className="bi bi-lightning-charge-fill"></i>
@@ -248,11 +830,13 @@ const DashboardView: React.FC<DashboardViewProps> = ({
 
       {/* ===== DETAILED STATS ROW (3 cards) — hidden for limited staff ===== */}
       {!isLimitedStaff && (
-        <div className="row g-3 mb-4">
+        <div
+          className={`dashboard-detail-grid ${isSuperAdminOrHead ? "dashboard-detail-grid-super" : ""}`}
+        >
           {/* Student Accounts */}
-          <div className="col-12 col-md-4">
+          <div className="dashboard-detail-cell">
             <div
-              className="card shadow-sm h-100"
+              className="card shadow-sm h-100 dashboard-section-card"
               style={{
                 border: "1px solid #e5e7eb",
                 borderLeft: "4px solid #2c5f2d",
@@ -290,9 +874,9 @@ const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
 
           {/* Staff Accounts */}
-          <div className="col-12 col-md-4">
+          <div className="dashboard-detail-cell">
             <div
-              className="card shadow-sm h-100"
+              className="card shadow-sm h-100 dashboard-section-card"
               style={{
                 border: "1px solid #e5e7eb",
                 borderLeft: "4px solid #3b82f6",
@@ -329,127 +913,67 @@ const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
           </div>
 
-          {/* Patient Records */}
-          <div className="col-12 col-md-4">
-            <div
-              className="card shadow-sm h-100"
-              style={{
-                border: "1px solid #e5e7eb",
-                borderLeft: "4px solid #8b5cf6",
-              }}
-            >
-              <div className="card-body">
-                <div
-                  className="d-flex align-items-center gap-2 mb-3"
-                  style={{ color: "#8b5cf6" }}
-                >
-                  <i className="bi bi-file-earmark-medical fs-5"></i>
-                  <span className="fw-bold">Patient Records</span>
+          {!isSuperAdminOrHead && (
+            <div className="dashboard-detail-cell">
+              <div
+                className="card shadow-sm h-100 dashboard-section-card"
+                style={{
+                  border: "1px solid #e5e7eb",
+                  borderLeft: "4px solid #8b5cf6",
+                }}
+              >
+                <div className="card-body">
+                  <div
+                    className="d-flex align-items-center gap-2 mb-3"
+                    style={{ color: "#8b5cf6" }}
+                  >
+                    <i className="bi bi-file-earmark-medical fs-5"></i>
+                    <span className="fw-bold">Patient Records</span>
+                  </div>
+                  <DetailRow
+                    label="Physical Exams"
+                    value={
+                      data.records.stats.physicalExam?.allTime?.toLocaleString() ||
+                      "0"
+                    }
+                  />
+                  <DetailRow
+                    label="Active Monitoring"
+                    value={
+                      data.records.stats.monitoring?.pending?.toLocaleString() ||
+                      "0"
+                    }
+                    badgeClass="bg-info-subtle text-info"
+                  />
+                  <DetailRow
+                    label="Certificates Issued"
+                    value={
+                      data.records.stats.certificate?.approved?.toLocaleString() ||
+                      "0"
+                    }
+                    badgeClass="bg-light text-muted"
+                  />
+                  <DetailRow
+                    label="Lab Requests"
+                    value={
+                      data.records.stats.laboratoryRequest?.allTime?.toLocaleString() ||
+                      "0"
+                    }
+                    badgeClass="bg-danger-subtle text-danger"
+                  />
                 </div>
-                <DetailRow
-                  label="Physical Exams"
-                  value={
-                    data.records.stats.physicalExam?.allTime?.toLocaleString() ||
-                    "0"
-                  }
-                />
-                <DetailRow
-                  label="Active Monitoring"
-                  value={
-                    data.records.stats.monitoring?.pending?.toLocaleString() ||
-                    "0"
-                  }
-                  badgeClass="bg-info-subtle text-info"
-                />
-                <DetailRow
-                  label="Certificates Issued"
-                  value={
-                    data.records.stats.certificate?.approved?.toLocaleString() ||
-                    "0"
-                  }
-                  badgeClass="bg-light text-muted"
-                />
-                <DetailRow
-                  label="Lab Requests"
-                  value={
-                    data.records.stats.laboratoryRequest?.allTime?.toLocaleString() ||
-                    "0"
-                  }
-                  badgeClass="bg-danger-subtle text-danger"
-                />
               </div>
             </div>
-          </div>
+          )}
         </div>
       )}
 
       {/* ===== CHARTS ROW (Monthly Trends + Activity Distribution) ===== */}
-      <DashboardCharts data={data} />
-
-      {/* ===== PREDICTIVE ANALYTICS (CatBoost ML) ===== */}
-      {mlLoading ? (
-        <div className="text-center py-4 mt-4">
-          <div className="spinner-border spinner-border-sm text-success me-2"></div>
-          <span className="text-muted">
-            Loading Predictive Analytics... This may take a moment on first
-            load.
-          </span>
+      {!isSuperAdminOrHead && (
+        <div className="dashboard-chart-wrap">
+          <DashboardCharts data={data} />
         </div>
-      ) : mlData ? (
-        <PredictiveAnalytics data={mlData} />
-      ) : mlError ? (
-        <div
-          className="mt-4 p-4 rounded-4 text-center"
-          style={{
-            background: "rgba(99, 102, 241, 0.04)",
-            border: "1px solid rgba(99, 102, 241, 0.15)",
-          }}
-        >
-          <div className="mb-3">
-            <i
-              className="bi bi-cpu-fill"
-              style={{ fontSize: "2rem", color: "#6366f1" }}
-            ></i>
-          </div>
-          <h6 className="fw-bold mb-1">Predictive Analytics</h6>
-          <p className="text-muted small mb-3">
-            Failed to load CatBoost ML predictions. The service may be
-            temporarily unavailable.
-          </p>
-          <button
-            className="btn btn-sm px-4 py-2"
-            style={{
-              background: "linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)",
-              color: "white",
-              border: "none",
-              borderRadius: "8px",
-              fontWeight: 600,
-            }}
-            onClick={async () => {
-              setMlLoading(true);
-              setMlError(false);
-              setMlRetryCount((c) => c + 1);
-              try {
-                const result = await fetchPredictiveWithRetry(2);
-                if (result) {
-                  setMlData(result);
-                  setMlError(false);
-                } else {
-                  setMlError(true);
-                }
-              } catch (err) {
-                console.error("Retry predictive analytics failed:", err);
-                setMlError(true);
-              } finally {
-                setMlLoading(false);
-              }
-            }}
-          >
-            <i className="bi bi-arrow-clockwise me-2"></i>
-            Retry Loading
-          </button>
-        </div>
-      ) : null}
+      )}
     </div>
   );
 };

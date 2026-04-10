@@ -2,6 +2,8 @@
 node_modules/
 MEDILOG/node_modules/
 backend/node_modules/
+.venv/
+venv/
 
 # Environment variables
 .env
@@ -14,6 +16,7 @@ build/
 # CatBoost temp files
 catboost_info/
 backend/catboost_info/
+analysis/
 
 # Python cache
 __pycache__/
@@ -31,5 +34,9 @@ Thumbs.db
 *.log
 npm-debug.log*
 
-# Backup files (optional - remove if you want to track these)
-# backend/backups/
+# Local backup files
+backend/backups/*.json
+
+# Generated ML report artifacts
+backend/ml/models/visit_forecast/*.png
+backend/ml/models/visit_forecast/*_report.md

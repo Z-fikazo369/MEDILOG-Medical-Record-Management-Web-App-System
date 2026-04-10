@@ -6,8 +6,12 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon server.js",
-    "create-admin": "node scripts/createAdmin.js"
+    "dev": "nodemon --config nodemon.json server.js",
+    "create-admin": "node scripts/createAdmin.js",
+    "ml:train-visit-forecast": "node scripts/trainVisitForecast.js",
+    "ml:predict-visit-forecast": "node scripts/predictVisitForecast.js",
+    "ml:report-visit-forecast": "node scripts/reportVisitForecast.js",
+    "ai:migrate-to-nurse": "node scripts/migrateAiAssistantToNurse.js"
   },
   "dependencies": {
     "axios": "^1.13.2",

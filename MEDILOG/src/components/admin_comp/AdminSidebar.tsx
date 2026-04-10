@@ -30,6 +30,7 @@ interface AdminSidebarProps {
   onToggleCollapse: () => void;
   userRole?: "student" | "admin" | "staff";
   userPosition?: string;
+  isSuperAdminOrHead?: boolean;
 }
 
 const AdminSidebar: React.FC<AdminSidebarProps> = ({
@@ -45,6 +46,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
   onToggleCollapse,
   userRole,
   userPosition,
+  isSuperAdminOrHead = false,
 }) => {
   const [isRecordsOpen, setIsRecordsOpen] = useState(false);
   const isRecordsActive = view === "patientRecords";
@@ -157,165 +159,166 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
 
         <hr className="sidebar-separator" />
 
-        {collapsed ? (
-          <li className="nav-item">
-            <label
-              onClick={() => {
-                setView("patientRecords");
-                setRecordType("physicalExam");
-              }}
-              className={`nav-link ${view === "patientRecords" ? "active" : ""}`}
-              style={{ cursor: "pointer" }}
-              title="Records"
-            >
-              <i className="bi bi-file-earmark-medical"></i>
-              {(recordPendingCounts.total || 0) > 0 && (
-                <span className="sidebar-badge-dot"></span>
-              )}
-            </label>
-          </li>
-        ) : (
-          <li className="nav-item">
-            <label
-              onClick={() => setIsRecordsOpen(!isRecordsOpen)}
-              className={`nav-link d-flex justify-content-between align-items-center ${isRecordsActive ? "active" : ""}`}
-              style={{ cursor: "pointer" }}
-            >
-              <span>
-                <i className="bi bi-file-earmark-medical"></i> Records
-              </span>
-              <span className="d-flex align-items-center gap-2">
+        {!isSuperAdminOrHead &&
+          (collapsed ? (
+            <li className="nav-item">
+              <label
+                onClick={() => {
+                  setView("patientRecords");
+                  setRecordType("physicalExam");
+                }}
+                className={`nav-link ${view === "patientRecords" ? "active" : ""}`}
+                style={{ cursor: "pointer" }}
+                title="Records"
+              >
+                <i className="bi bi-file-earmark-medical"></i>
                 {(recordPendingCounts.total || 0) > 0 && (
-                  <span
-                    className="badge bg-white text-success rounded-pill"
-                    style={{ fontSize: "0.7rem" }}
-                  >
-                    {recordPendingCounts.total}
-                  </span>
+                  <span className="sidebar-badge-dot"></span>
                 )}
-                <i
-                  className={`bi bi-chevron-${isRecordsOpen ? "down" : "right"}`}
-                  style={{ fontSize: "0.75rem" }}
-                ></i>
-              </span>
-            </label>
+              </label>
+            </li>
+          ) : (
+            <li className="nav-item">
+              <label
+                onClick={() => setIsRecordsOpen(!isRecordsOpen)}
+                className={`nav-link d-flex justify-content-between align-items-center ${isRecordsActive ? "active" : ""}`}
+                style={{ cursor: "pointer" }}
+              >
+                <span>
+                  <i className="bi bi-file-earmark-medical"></i> Records
+                </span>
+                <span className="d-flex align-items-center gap-2">
+                  {(recordPendingCounts.total || 0) > 0 && (
+                    <span
+                      className="badge bg-white text-success rounded-pill"
+                      style={{ fontSize: "0.7rem" }}
+                    >
+                      {recordPendingCounts.total}
+                    </span>
+                  )}
+                  <i
+                    className={`bi bi-chevron-${isRecordsOpen ? "down" : "right"}`}
+                    style={{ fontSize: "0.75rem" }}
+                  ></i>
+                </span>
+              </label>
 
-            {isRecordsOpen && (
-              <ul className="nav flex-column admin-records-submenu">
-                <li className="nav-item">
-                  <a
-                    className={`nav-link records-submenu-item py-1${view === "patientRecords" && recordType === "physicalExam" ? " records-submenu-active" : ""}`}
-                    href="#"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      setView("patientRecords");
-                      setRecordType("physicalExam");
-                    }}
-                  >
-                    <i className="bi bi-person-vcard me-2"></i>
-                    Physical Exam
-                    {(recordPendingCounts.physicalExam || 0) > 0 && (
-                      <span
-                        className="badge bg-warning text-dark ms-auto rounded-pill"
-                        style={{ fontSize: "0.6rem" }}
-                      >
-                        {recordPendingCounts.physicalExam}
-                      </span>
-                    )}
-                  </a>
-                </li>
-                <li className="nav-item">
-                  <a
-                    className={`nav-link records-submenu-item py-1${view === "patientRecords" && recordType === "monitoring" ? " records-submenu-active" : ""}`}
-                    href="#"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      setView("patientRecords");
-                      setRecordType("monitoring");
-                    }}
-                  >
-                    <i className="bi bi-heart-pulse me-2"></i>
-                    Monitoring
-                    {(recordPendingCounts.monitoring || 0) > 0 && (
-                      <span
-                        className="badge bg-warning text-dark ms-auto rounded-pill"
-                        style={{ fontSize: "0.6rem" }}
-                      >
-                        {recordPendingCounts.monitoring}
-                      </span>
-                    )}
-                  </a>
-                </li>
-                <li className="nav-item">
-                  <a
-                    className={`nav-link records-submenu-item py-1${view === "patientRecords" && recordType === "certificate" ? " records-submenu-active" : ""}`}
-                    href="#"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      setView("patientRecords");
-                      setRecordType("certificate");
-                    }}
-                  >
-                    <i className="bi bi-file-earmark-medical me-2"></i>
-                    Certificate
-                    {(recordPendingCounts.certificate || 0) > 0 && (
-                      <span
-                        className="badge bg-warning text-dark ms-auto rounded-pill"
-                        style={{ fontSize: "0.6rem" }}
-                      >
-                        {recordPendingCounts.certificate}
-                      </span>
-                    )}
-                  </a>
-                </li>
-                <li className="nav-item">
-                  <a
-                    className={`nav-link records-submenu-item py-1${view === "patientRecords" && recordType === "medicineIssuance" ? " records-submenu-active" : ""}`}
-                    href="#"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      setView("patientRecords");
-                      setRecordType("medicineIssuance");
-                    }}
-                  >
-                    <i className="bi bi-capsule me-2"></i>
-                    Medicine Issuance
-                    {(recordPendingCounts.medicineIssuance || 0) > 0 && (
-                      <span
-                        className="badge bg-warning text-dark ms-auto rounded-pill"
-                        style={{ fontSize: "0.6rem" }}
-                      >
-                        {recordPendingCounts.medicineIssuance}
-                      </span>
-                    )}
-                  </a>
-                </li>
-                <li className="nav-item">
-                  <a
-                    className={`nav-link records-submenu-item py-1${view === "patientRecords" && recordType === "laboratoryRequest" ? " records-submenu-active" : ""}`}
-                    href="#"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      setView("patientRecords");
-                      setRecordType("laboratoryRequest");
-                    }}
-                  >
-                    <i className="bi bi-clipboard2-pulse me-2"></i>
-                    Laboratory Request
-                    {(recordPendingCounts.laboratoryRequest || 0) > 0 && (
-                      <span
-                        className="badge bg-warning text-dark ms-auto rounded-pill"
-                        style={{ fontSize: "0.6rem" }}
-                      >
-                        {recordPendingCounts.laboratoryRequest}
-                      </span>
-                    )}
-                  </a>
-                </li>
-              </ul>
-            )}
-          </li>
-        )}
+              {isRecordsOpen && (
+                <ul className="nav flex-column admin-records-submenu">
+                  <li className="nav-item">
+                    <a
+                      className={`nav-link records-submenu-item py-1${view === "patientRecords" && recordType === "physicalExam" ? " records-submenu-active" : ""}`}
+                      href="#"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setView("patientRecords");
+                        setRecordType("physicalExam");
+                      }}
+                    >
+                      <i className="bi bi-person-vcard me-2"></i>
+                      Physical Exam
+                      {(recordPendingCounts.physicalExam || 0) > 0 && (
+                        <span
+                          className="badge bg-warning text-dark ms-auto rounded-pill"
+                          style={{ fontSize: "0.6rem" }}
+                        >
+                          {recordPendingCounts.physicalExam}
+                        </span>
+                      )}
+                    </a>
+                  </li>
+                  <li className="nav-item">
+                    <a
+                      className={`nav-link records-submenu-item py-1${view === "patientRecords" && recordType === "monitoring" ? " records-submenu-active" : ""}`}
+                      href="#"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setView("patientRecords");
+                        setRecordType("monitoring");
+                      }}
+                    >
+                      <i className="bi bi-heart-pulse me-2"></i>
+                      Monitoring
+                      {(recordPendingCounts.monitoring || 0) > 0 && (
+                        <span
+                          className="badge bg-warning text-dark ms-auto rounded-pill"
+                          style={{ fontSize: "0.6rem" }}
+                        >
+                          {recordPendingCounts.monitoring}
+                        </span>
+                      )}
+                    </a>
+                  </li>
+                  <li className="nav-item">
+                    <a
+                      className={`nav-link records-submenu-item py-1${view === "patientRecords" && recordType === "certificate" ? " records-submenu-active" : ""}`}
+                      href="#"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setView("patientRecords");
+                        setRecordType("certificate");
+                      }}
+                    >
+                      <i className="bi bi-file-earmark-medical me-2"></i>
+                      Certificate
+                      {(recordPendingCounts.certificate || 0) > 0 && (
+                        <span
+                          className="badge bg-warning text-dark ms-auto rounded-pill"
+                          style={{ fontSize: "0.6rem" }}
+                        >
+                          {recordPendingCounts.certificate}
+                        </span>
+                      )}
+                    </a>
+                  </li>
+                  <li className="nav-item">
+                    <a
+                      className={`nav-link records-submenu-item py-1${view === "patientRecords" && recordType === "medicineIssuance" ? " records-submenu-active" : ""}`}
+                      href="#"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setView("patientRecords");
+                        setRecordType("medicineIssuance");
+                      }}
+                    >
+                      <i className="bi bi-capsule me-2"></i>
+                      Medicine Issuance
+                      {(recordPendingCounts.medicineIssuance || 0) > 0 && (
+                        <span
+                          className="badge bg-warning text-dark ms-auto rounded-pill"
+                          style={{ fontSize: "0.6rem" }}
+                        >
+                          {recordPendingCounts.medicineIssuance}
+                        </span>
+                      )}
+                    </a>
+                  </li>
+                  <li className="nav-item">
+                    <a
+                      className={`nav-link records-submenu-item py-1${view === "patientRecords" && recordType === "laboratoryRequest" ? " records-submenu-active" : ""}`}
+                      href="#"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setView("patientRecords");
+                        setRecordType("laboratoryRequest");
+                      }}
+                    >
+                      <i className="bi bi-clipboard2-pulse me-2"></i>
+                      Laboratory Request
+                      {(recordPendingCounts.laboratoryRequest || 0) > 0 && (
+                        <span
+                          className="badge bg-warning text-dark ms-auto rounded-pill"
+                          style={{ fontSize: "0.6rem" }}
+                        >
+                          {recordPendingCounts.laboratoryRequest}
+                        </span>
+                      )}
+                    </a>
+                  </li>
+                </ul>
+              )}
+            </li>
+          ))}
 
         {!isLimitedStaff && (
           <li className="nav-item">
@@ -344,16 +347,18 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
           </li>
         )}
 
-        <li className="nav-item">
-          <label
-            onClick={() => setView("aiAssistant")}
-            className={`nav-link ${view === "aiAssistant" ? "active" : ""}`}
-            style={{ cursor: "pointer" }}
-            title="AI Assistant"
-          >
-            <i className="bi bi-robot"></i> {!collapsed && "AI Assistant"}
-          </label>
-        </li>
+        {!isSuperAdminOrHead && (
+          <li className="nav-item">
+            <label
+              onClick={() => setView("aiAssistant")}
+              className={`nav-link ${view === "aiAssistant" ? "active" : ""}`}
+              style={{ cursor: "pointer" }}
+              title="AI Assistant"
+            >
+              <i className="bi bi-robot"></i> {!collapsed && "AI Assistant"}
+            </label>
+          </li>
+        )}
 
         <li className="nav-item mt-auto">
           <a href="#" onClick={onLogout} className="nav-link" title="Logout">

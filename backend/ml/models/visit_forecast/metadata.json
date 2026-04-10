@@ -1,0 +1,69 @@
+{
+  "trainedAt": "2026-04-10T16:00:09.876858Z",
+  "featureNames": [
+    "lag1",
+    "lag2",
+    "lag3",
+    "rolling3",
+    "momentum",
+    "seasonal_last_year",
+    "week_of_year",
+    "year"
+  ],
+  "trainingRows": 33,
+  "trainingWeeks": 36,
+  "minHistoryWeeks": 12,
+  "lastCompletedWeek": {
+    "year": 2026,
+    "week": 14,
+    "label": "2026-W14"
+  },
+  "forecastHorizonWeeks": 4,
+  "nextWeeklyForecast": [
+    {
+      "year": 2026,
+      "week": 15,
+      "label": "2026-W15",
+      "predictedVisits": 54
+    },
+    {
+      "year": 2026,
+      "week": 16,
+      "label": "2026-W16",
+      "predictedVisits": 62
+    },
+    {
+      "year": 2026,
+      "week": 17,
+      "label": "2026-W17",
+      "predictedVisits": 58
+    },
+    {
+      "year": 2026,
+      "week": 18,
+      "label": "2026-W18",
+      "predictedVisits": 66
+    }
+  ],
+  "monthlyEstimate": 240,
+  "metrics": {
+    "train": {
+      "mae": 2.8235,
+      "rmse": 5.5541,
+      "mape": 4.6817,
+      "r2": 0.9413
+    },
+    "validation": {
+      "mae": 14.6416,
+      "rmse": 16.8789,
+      "mape": 34.7281,
+      "r2": 0.0757
+    }
+  },
+  "split": {
+    "trainRatio": 0.7,
+    "validationRatio": 0.3,
+    "trainRows": 23,
+    "validationRows": 10
+  }
+}

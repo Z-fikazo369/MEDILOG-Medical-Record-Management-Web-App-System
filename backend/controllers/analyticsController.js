@@ -875,7 +875,7 @@ export const getPredictiveAnalytics = async (req, res) => {
       "[Analytics] CatBoost unavailable — using statistical fallback",
     );
 
-    // --- Forecast (linear regression) ---
+    // --- Forecast (trend-based regression) ---
     const forecastMonths = [];
     for (let i = 5; i >= 0; i--) {
       const mStart = new Date(today.getFullYear(), today.getMonth() - i, 1);
@@ -906,10 +906,14 @@ export const getPredictiveAnalytics = async (req, res) => {
         predicted: null,
       });
     }
+    // Trend-based regression based on historical monthly totals
     const points = forecastMonths.map((m, i) => ({ x: i, y: m.actual }));
-    const { slope, intercept } = linearRegression(points);
+    let { slope, intercept } = linearRegression(points);
+    // No minSlope: use true regression for natural curve
+    // Set last actual as predicted for current month
     forecastMonths[forecastMonths.length - 1].predicted =
       forecastMonths[forecastMonths.length - 1].actual;
+    // Forecast next 4 months using trend
     for (let j = 1; j <= 4; j++) {
       const futureDate = new Date(today.getFullYear(), today.getMonth() + j, 1);
       const label = futureDate.toLocaleString("en-US", { month: "short" });
@@ -922,6 +926,7 @@ export const getPredictiveAnalytics = async (req, res) => {
         ),
       });
     }
+    // Calculate forecast increase
     const lastActual = forecastMonths.find(
       (m) => m.actual !== null && m.predicted === m.actual,
     );
@@ -1049,17 +1054,22 @@ export const getPredictiveAnalytics = async (req, res) => {
     lowRisk += Math.max(0, totalStudents - studentFeatures.length);
 
     // --- Fallback metrics ---
+    // Trend-based fallback metrics
     const actualValues = points.map((p) => p.y);
     const predictedValues = points.map((p) =>
       Math.round(intercept + slope * p.x),
     );
     const meanActual =
-      actualValues.reduce((a, b) => a + b, 0) / actualValues.length;
+      actualValues.length > 0
+        ? actualValues.reduce((a, b) => a + b, 0) / actualValues.length
+        : 0;
     const maeFallback =
-      actualValues.reduce(
-        (sum, a, i) => sum + Math.abs(a - predictedValues[i]),
-        0,
-      ) / actualValues.length;
+      actualValues.length > 0
+        ? actualValues.reduce(
+            (sum, a, i) => sum + Math.abs(a - predictedValues[i]),
+            0,
+          ) / actualValues.length
+        : 0;
     const normalizedAccuracy =
       meanActual > 0
         ? Math.max(0, Math.min(1, 1 - maeFallback / meanActual))

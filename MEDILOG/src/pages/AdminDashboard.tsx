@@ -297,6 +297,20 @@ const AdminDashboard: React.FC = () => {
   const isLimitedStaff =
     user?.role === "staff" && user?.position !== "Head Director";
 
+  const normalizedEmail = (user?.email || "").trim().toLowerCase();
+  const normalizedPosition = (user?.position || "").trim().toLowerCase();
+  const isSuperAdminOrHead =
+    normalizedEmail === "admin@medilog.com" ||
+    normalizedPosition.includes("head");
+
+  useEffect(() => {
+    if (!isSuperAdminOrHead) return;
+
+    if (view === "aiAssistant" || view === "patientRecords") {
+      setView("dashboard");
+    }
+  }, [isSuperAdminOrHead, view]);
+
   const getAvatarSrc = () => {
     if (user?.profilePictureUrl) {
       return user.profilePictureUrl;
@@ -326,6 +340,7 @@ const AdminDashboard: React.FC = () => {
           onToggleCollapse={() => setSidebarCollapsed((prev) => !prev)}
           userRole={user?.role}
           userPosition={user?.position}
+          isSuperAdminOrHead={isSuperAdminOrHead}
         />
 
         <div className={`flex-grow-1 d-flex flex-column`}>
@@ -350,7 +365,7 @@ const AdminDashboard: React.FC = () => {
                     letterSpacing: "0.3px",
                   }}
                 >
-                  Admin Portal
+                  {user?.role === "staff" ? "Staff Portal" : "Admin Portal"}
                 </h5>
               </div>
             </div>
@@ -576,6 +591,7 @@ const AdminDashboard: React.FC = () => {
                 pendingCount={pendingCount}
                 onStatsLoaded={(stats) => setPendingCount(stats.pendingCount)}
                 isLimitedStaff={isLimitedStaff}
+                isSuperAdminOrHead={isSuperAdminOrHead}
               />
             </div>
 
@@ -599,7 +615,7 @@ const AdminDashboard: React.FC = () => {
             {view === "pharmacy" && <PharmacyInventoryView />}
 
             {/* --- PATIENT RECORDS VIEW --- */}
-            {view === "patientRecords" && (
+            {!isSuperAdminOrHead && view === "patientRecords" && (
               <PatientRecordsView recordType={recordType} />
             )}
 
@@ -612,7 +628,9 @@ const AdminDashboard: React.FC = () => {
             {!isLimitedStaff && view === "activityLog" && <StaffActivityView />}
 
             {/* --- AI ASSISTANT VIEW --- */}
-            {view === "aiAssistant" && <AiAssistantView />}
+            {!isSuperAdminOrHead && view === "aiAssistant" && (
+              <AiAssistantView />
+            )}
           </div>
         </div>
 
